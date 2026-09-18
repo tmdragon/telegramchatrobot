@@ -1,0 +1,22 @@
+<dialog class="modal" id="mapping-modal" data-modal-target="mapping">
+  <h2 class="modal__title" data-modal-title>编辑映射</h2>
+  <form method="dialog" class="modal__form" data-modal-form>
+    <input type="hidden" name="project_id" data-field="project_id" />
+    <label class="modal__field">
+      群 chat_id
+      <input type="text" name="chat_id" data-field="chat_id" required pattern="-?\d+" />
+    </label>
+    <label class="modal__field">
+      备注
+      <input type="text" name="note" data-field="note" />
+    </label>
+    <label class="modal__field">
+      启用
+      <input type="checkbox" name="enabled" data-field="enabled" />
+    </label>
+    <div class="modal__actions">
+      <button type="button" data-action="modal-cancel">取消</button>
+      <button type="submit" data-action="modal-submit">保存</button>
+    </div>
+  </form>
+</dialog>

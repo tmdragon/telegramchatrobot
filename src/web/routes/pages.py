@@ -1,6 +1,7 @@
 """页面路由（HTML）。"""
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -163,5 +164,38 @@ async def project_detail(request: Request, project_id: str):
             "last_refresh_at": last.isoformat() if last else None,
             "last_refresh_human": last_human,
             "errors": [],
+        },
+    )
+
+
+@router.get("/mappings", response_class=HTMLResponse)
+async def mappings(request: Request):
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    templates = app.state.templates
+    cache = app.state.cache
+
+    # mapping_repo.load_all 是同步 gspread → to_thread
+    try:
+        mappings_list = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception as e:  # noqa: BLE001
+        return templates.TemplateResponse(
+            request=request, name="mappings.html",
+            context={
+                "page_name": "mappings", "mappings": [],
+                "last_refresh_at": None, "last_refresh_human": None,
+                "errors": [f"无法读取映射表: {type(e).__name__}: {e}"],
+            },
+            status_code=200,
+        )
+
+    last = cache.last_refresh_at() if cache else None
+    last_human = last.strftime("%Y-%m-%d %H:%M:%S UTC") if last else None
+    return templates.TemplateResponse(
+        request=request, name="mappings.html",
+        context={
+            "page_name": "mappings", "mappings": mappings_list,
+            "last_refresh_at": last.isoformat() if last else None,
+            "last_refresh_human": last_human, "errors": [],
         },
     )
