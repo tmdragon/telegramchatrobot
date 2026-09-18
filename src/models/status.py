@@ -26,20 +26,20 @@ class StatusCode(str, Enum):
 
 # 完整别名表（spec §3.2）。标准化函数先精确匹配代码本身，再遍历别名。
 ALIASES: dict[StatusCode, list[str]] = {
-    StatusCode.ORDERED: ["下单", "已下单", "待开始", "已下单待制作"],
-    StatusCode.MAKING: ["制作中", "生产中", "制作"],
-    StatusCode.CLIENT_REVIEW: ["验收中", "客户验收", "客户审核"],
-    StatusCode.REWORK: ["返工", "修改中", "调整中"],
-    StatusCode.WAITING_AAB: ["等AAB", "AAB包准备中"],
+    StatusCode.ORDERED: ["下单", "已下单", "待开始", "已下单待制作", "对方下单"],
+    StatusCode.MAKING: ["制作中", "生产中", "制作", "我方制作中"],
+    StatusCode.CLIENT_REVIEW: ["验收中", "客户验收", "客户审核", "对方验收中"],
+    StatusCode.REWORK: ["返工", "修改中", "调整中", "返工中"],
+    StatusCode.WAITING_AAB: ["等AAB", "AAB包准备中", "等待AAB包"],
     StatusCode.WAITING_SUBMIT: ["等待提审", "待提交"],
     StatusCode.SUBMITTING: ["提审中", "提交中", "提交审核"],
     StatusCode.FIRST_REVIEW_PASSED: ["一审通过", "第一轮通过"],
     StatusCode.FIRST_REVIEW_REJECTED: ["一审打回", "第一轮未通过"],
     StatusCode.SECOND_REVIEW: ["复审中", "最终审核"],
-    StatusCode.REMAKING: ["重做中", "重新制作", "修复中"],
+    StatusCode.REMAKING: ["重做中", "重新制作", "修复中", "我方重做中"],
     StatusCode.PUBLISHED: ["已发布", "上线了", "上架"],
-    StatusCode.PAID: ["已回款", "已收款", "已结款"],
-    StatusCode.UNPAID: ["未回款", "未收款", "待回款"],
+    StatusCode.PAID: ["已回款", "已收款", "已结款", "对方已回款"],
+    StatusCode.UNPAID: ["未回款", "未收款", "待回款", "对方未回款"],
 }
 
 

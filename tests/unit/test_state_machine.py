@@ -27,5 +27,5 @@ def test_paid_unpaid_bidirectional():
 
 def test_legal_next_states():
     assert legal_next_states(StatusCode.ORDERED) == {StatusCode.MAKING}
-    assert StatusCode.SECOND_REVIEW in legal_next_states(StatusCode.SECOND_REVIEW) is False
+    assert StatusCode.SECOND_REVIEW not in legal_next_states(StatusCode.SECOND_REVIEW)
     assert {StatusCode.PUBLISHED, StatusCode.REMAKING} == legal_next_states(StatusCode.SECOND_REVIEW)
