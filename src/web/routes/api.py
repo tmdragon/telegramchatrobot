@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import unquote
@@ -10,9 +11,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.models.project import Mapping as MappingModel
 from src.models.status import normalize as normalize_status
 from src.sheets.repo import WriteVerificationError
 from src.web.cache import LOCKED_RECOGNIZED_AS
+
+_CHAT_ID_RE = re.compile(r"^-?\d+$")
 
 router = APIRouter(prefix="/api")
 
@@ -219,4 +223,144 @@ async def put_field(request: Request, project_id: str, field_id: str, body: Fiel
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "status_changed": status_changed,
         "new_status_code": new_status_code.value if new_status_code else None,
+    }
+
+
+@router.get("/mappings")
+async def get_mappings(request: Request):
+    """返回所有映射。同步 IO 走 asyncio.to_thread。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    try:
+        items = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"mapping load failed: {e}")
+    return {
+        "mappings": [
+            {
+                "project_id": m.project_id,
+                "chat_id": m.chat_id,
+                "note": m.note,
+                "enabled": m.enabled,
+                "last_broadcast_at": m.last_broadcast_at.isoformat() if m.last_broadcast_at else None,
+                "last_broadcast_status": m.last_broadcast_status,
+                "last_error": m.last_error,
+            }
+            for m in items
+        ]
+    }
+
+
+class MappingCreateBody(BaseModel):
+    project_id: str
+    chat_id: str
+    note: str = ""
+    enabled: bool = True
+
+
+class MappingUpdateBody(BaseModel):
+    chat_id: str | None = None
+    note: str | None = None
+    enabled: bool | None = None
+
+
+@router.post("/mappings", status_code=201)
+async def post_mapping(request: Request, body: MappingCreateBody):
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    store = app.state.store
+
+    project_id = (body.project_id or "").strip()
+    chat_id = (body.chat_id or "").strip()
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+    if not _CHAT_ID_RE.match(chat_id):
+        raise HTTPException(status_code=400, detail="chat_id must be signed integer (e.g. -100...)")
+
+    # 查重
+    try:
+        existing = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"mapping load failed: {e}")
+    if any(m.project_id == project_id for m in existing):
+        raise HTTPException(status_code=400, detail=f"mapping for {project_id} already exists (duplicate)")
+
+    mapping = MappingModel(
+        project_id=project_id, chat_id=chat_id, note=body.note, enabled=body.enabled,
+        last_broadcast_at=None, last_broadcast_status=None, last_error=None,
+    )
+    try:
+        await asyncio.to_thread(mapping_repo.upsert, mapping)
+        await asyncio.to_thread(store.save_mapping_snapshot, mapping)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"write failed: {e}")
+    return {
+        "project_id": mapping.project_id,
+        "chat_id": mapping.chat_id,
+        "note": mapping.note,
+        "enabled": mapping.enabled,
+    }
+
+
+@router.put("/mappings/{project_id}")
+async def put_mapping(request: Request, project_id: str, body: MappingUpdateBody):
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    store = app.state.store
+
+    try:
+        existing_list = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"mapping load failed: {e}")
+    existing = next((m for m in existing_list if m.project_id == project_id), None)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"mapping {project_id} not found")
+
+    updated = MappingModel(
+        project_id=existing.project_id,
+        chat_id=(body.chat_id if body.chat_id is not None else existing.chat_id),
+        note=(body.note if body.note is not None else existing.note),
+        enabled=(body.enabled if body.enabled is not None else existing.enabled),
+        last_broadcast_at=existing.last_broadcast_at,  # 保留
+        last_broadcast_status=existing.last_broadcast_status,
+        last_error=existing.last_error,
+    )
+    if updated.chat_id and not _CHAT_ID_RE.match(updated.chat_id):
+        raise HTTPException(status_code=400, detail="chat_id must be signed integer")
+    try:
+        await asyncio.to_thread(mapping_repo.upsert, updated)
+        await asyncio.to_thread(store.save_mapping_snapshot, updated)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"write failed: {e}")
+    return {
+        "project_id": updated.project_id,
+        "chat_id": updated.chat_id,
+        "note": updated.note,
+        "enabled": updated.enabled,
+        "last_broadcast_at": updated.last_broadcast_at.isoformat() if updated.last_broadcast_at else None,
+    }
+
+
+@router.delete("/mappings/{project_id}")
+async def delete_mapping(request: Request, project_id: str):
+    """软删除：Phase 1 MappingRepo.delete 设置 enabled=FALSE。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    store = app.state.store
+    try:
+        await asyncio.to_thread(mapping_repo.delete, project_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"delete failed: {e}")
+    # 同步本地 SQLite 快照（保 enabled=FALSE）
+    try:
+        existing_list = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception:  # noqa: BLE001
+        existing_list = []
+    existing = next((m for m in existing_list if m.project_id == project_id), None)
+    if existing is not None:
+        await asyncio.to_thread(store.save_mapping_snapshot, existing)
+    return {
+        "project_id": project_id,
+        "enabled": False,
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
     }
