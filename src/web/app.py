@@ -60,5 +60,7 @@ def create_app(
     # 路由（T3 注册 overview，T5 注册 project detail，T10a 注册 mappings）
     from src.web.routes import pages as pages_routes
     app.include_router(pages_routes.router)
+    from src.web.routes import api as api_routes
+    app.include_router(api_routes.router)
 
     return app
