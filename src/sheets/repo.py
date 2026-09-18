@@ -105,3 +105,31 @@ class SheetRepo:
                     p.sheets.append(sheet_view)
 
         return list(projects_by_id.values())
+
+    def update_cell(
+        self,
+        spreadsheet_name: str,
+        worksheet_name: str,
+        row: int,
+        col: int,
+        new_value: str,
+    ) -> str:
+        """写入单元格，重读校验，返回最终值。
+
+        Raises:
+            WriteVerificationError: 写后读出的值与 new_value 不一致。
+        """
+        sh = self.client.open(spreadsheet_name)
+        ws = sh.worksheet(worksheet_name)
+        ws.update_cell(row, col, new_value)
+        verified = ws.cell(row, col).value
+        if verified != new_value:
+            raise WriteVerificationError(
+                f"Write verification failed at {spreadsheet_name}!{worksheet_name} "
+                f"({row},{col}): wrote {new_value!r}, read {verified!r}"
+            )
+        return verified
+
+
+class WriteVerificationError(RuntimeError):
+    """写后重读校验失败。"""
