@@ -1,0 +1,65 @@
+/* checkGPRobot Phase 2 UI — BEM 命名约定 */
+
+/* ===== Reset / Layout ===== */
+*, *::before, *::after { box-sizing: border-box; }
+body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; background: #f6f7f9; color: #1f2328; }
+h1, h2, h3 { margin: 0 0 0.5em; }
+
+/* ===== Status Bar ===== */
+.status-bar { display: flex; gap: 1rem; align-items: center; padding: 0.6rem 1rem; background: #fff; border-bottom: 1px solid #d0d7de; }
+.status-bar__btn { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 4px; padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.9rem; }
+.status-bar__btn:hover { background: #eaeef2; }
+.status-bar__btn--error { color: #cf222e; border-color: #cf222e; }
+.status-bar__refresh { font-size: 0.85rem; color: #57606a; }
+
+/* ===== Status Badge ===== */
+.status-badge { display: inline-flex; gap: 0.3rem; align-items: center; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.85rem; background: #eaeef2; }
+.status-badge__dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #57606a; display: inline-block; }
+.status-badge--making .status-badge__dot, .status-badge--ordered .status-badge__dot { background: #0969da; }
+.status-badge--client-review .status-badge__dot, .status-badge--rework .status-badge__dot, .status-badge--remaking .status-badge__dot { background: #8250df; }
+.status-badge--waiting-aab .status-badge__dot, .status-badge--waiting-submit .status-badge__dot, .status-badge--submitting .status-badge__dot, .status-badge--first-passed .status-badge__dot, .status-badge--second-review .status-badge__dot { background: #d4a72c; }
+.status-badge--first-rejected .status-badge__dot, .status-badge--unpaid .status-badge__dot { background: #cf222e; }
+.status-badge--published .status-badge__dot, .status-badge--paid .status-badge__dot { background: #1a7f37; }
+.status-badge--unknown .status-badge__dot { background: #8c959f; }
+
+/* ===== Error Banner ===== */
+.error-banner { background: #ffebe9; border: 1px solid #cf222e; border-radius: 4px; padding: 0.8rem 1rem; margin: 1rem; }
+.error-banner__title { color: #cf222e; display: block; margin-bottom: 0.3rem; }
+.error-banner__list { margin: 0; padding-left: 1.2rem; color: #82071e; }
+
+/* ===== Tables ===== */
+.sheet-section { margin: 1.5rem; }
+.sheet-section__title { margin-bottom: 0.5rem; }
+.sheet-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d0d7de; }
+.sheet-table th, .sheet-table td { padding: 0.5rem 0.8rem; border-bottom: 1px solid #eaeef2; text-align: left; }
+.sheet-table thead { background: #f6f8fa; }
+
+/* ===== Field Cell (used by inline-edit.js) ===== */
+.field-cell { cursor: default; }
+.field-cell--editable { cursor: pointer; }
+.field-cell--editable:hover { background: #fff8c5; }
+.field-cell--editing input { width: 100%; padding: 0.2rem; font: inherit; border: 1px solid #0969da; border-radius: 3px; }
+.field-cell--editing .field-cell__actions { display: inline-flex; gap: 0.3rem; margin-left: 0.5rem; }
+.field-cell--locked { color: #57606a; background: #f6f8fa; }
+.field-cell--locked::before { content: "🔒 "; font-size: 0.8rem; }
+.field-cell--error { background: #ffebe9 !important; }
+
+/* ===== Toast ===== */
+.toast-container { position: fixed; top: 4rem; right: 1rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 100; }
+.toast { padding: 0.6rem 1rem; border-radius: 4px; background: #1f2328; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.2); animation: toast-fade-in 0.2s ease-out; }
+.toast--error { background: #cf222e; }
+.toast--success { background: #1a7f37; }
+@keyframes toast-fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spinner-rotate { to { transform: rotate(360deg); } }
+.spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid #d0d7de; border-top-color: #0969da; border-radius: 50%; animation: spinner-rotate 0.6s linear infinite; }
+
+/* ===== Modal ===== */
+.modal { border: 1px solid #d0d7de; border-radius: 6px; padding: 1.2rem; min-width: 360px; background: #fff; }
+.modal::backdrop { background: rgba(0,0,0,0.4); }
+.modal--open { display: block; }
+.modal__title { margin-top: 0; }
+.modal__actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+/* ===== Row modifiers (mappings) ===== */
+.row--warn { background: #fff8c5; }
+.row--error { background: #ffebe9; }

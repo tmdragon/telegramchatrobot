@@ -1,0 +1,29 @@
+{# 顶部状态栏：上次刷新时间 / 手动刷新 / 自动刷新开关 / 错误计数 #}
+<header class="status-bar" id="status-bar">
+  <span class="status-bar__refresh">
+    上次刷新: <time data-last-refresh="{{ last_refresh_at or '' }}">
+      {{ last_refresh_human or "—" }}
+    </time>
+  </span>
+
+  <button type="button"
+          class="status-bar__btn"
+          data-action="manual-refresh">
+    🔄 手动刷新
+  </button>
+
+  <button type="button"
+          class="status-bar__btn"
+          data-action="auto-refresh-toggle"
+          aria-pressed="true">
+    <span data-auto-refresh-state>⏸ 自动刷新:开</span>
+  </button>
+
+  <button type="button"
+          class="status-bar__btn status-bar__btn--error"
+          data-action="show-errors"
+          hidden
+          data-error-count="0">
+    ⚠ <span data-error-count-text>0</span> 错误
+  </button>
+</header>

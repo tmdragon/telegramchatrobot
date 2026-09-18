@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}checkGPRobot{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <script type="module" src="/static/js/page-bootstrap.js" defer></script>
+</head>
+<body data-page="{{ page_name or 'overview' }}">
+  {% include "partials/_status_bar.html" %}
+
+  {% block content %}{% endblock %}
+
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+</body>
+</html>
