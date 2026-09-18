@@ -63,4 +63,8 @@ def create_app(
     from src.web.routes import api as api_routes
     app.include_router(api_routes.router)
 
+    # 静态资源（CSS / JS）—— T7a 完成
+    from starlette.staticfiles import StaticFiles
+    app.mount("/static", StaticFiles(directory="src/web/static"), name="static")
+
     return app
