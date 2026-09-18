@@ -50,6 +50,41 @@ python run.py --secrets config/secrets.yaml --sheets config/sheets.yaml
 [mapping] Loaded K mappings
 ```
 
+## 运行（Phase 2）
+
+Phase 1 完成后，再执行一次 `python run.py` —— 同一个入口会顺带启动 FastAPI：
+
+```bash
+python run.py --secrets config/secrets.yaml --sheets config/sheets.yaml
+```
+
+应看到：
+
+```
+[config] N spreadsheets configured
+[store] SQLite initialized at data/checkgprobot.db
+[data] Loaded M projects
+  • PRJ-001 项目一 — MAKING
+  ...
+[mapping] Loaded K mappings
+[ui] Listening on http://127.0.0.1:8765
+```
+
+浏览器打开 `http://127.0.0.1:8765` 可访问：
+
+| 路径 | 页面 |
+|---|---|
+| `/` | 项目总览（所有项目 + 当前状态 + 在当前状态停留时长） |
+| `/project/{project_id}` | 项目详情（所有 sheet 字段 + 内联编辑） |
+| `/mappings` | 项目 ↔ Telegram 群 映射管理（CRUD） |
+| `/health` | 健康检查 JSON |
+
+JSON API：`/api/projects`、`/api/projects/{id}`、`/api/projects/{id}/fields/{field_id}`（PUT）、`/api/refresh`（POST）、`/api/mappings`（GET/POST/PUT/DELETE）。
+
+停止：`Ctrl+C` 优雅退出。
+
+**注意**：服务绑定 `127.0.0.1:8765`，外部网络访问不到（spec §10.4）。
+
 ## 测试
 
 ```bash

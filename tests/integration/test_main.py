@@ -40,9 +40,13 @@ def test_main_loads_config_fetches_and_prints(tmp_path: Path, capsys):
     ]
     fake_client.open.return_value.worksheet.return_value = fake_ws
 
-    with patch("src.main.make_gspread_client", return_value=fake_client):
+    with patch("src.main.make_gspread_client", return_value=fake_client), \
+         patch("src.main.uvicorn.run") as mock_run:
         rc = main(["--secrets", str(secrets), "--sheets", str(sheets_cfg),
                    "--db", str(db)])
+
+    # Phase 2：uvicorn 启动被 mock，验证调用参数正确
+    assert mock_run.called
 
     assert rc == 0
     out = capsys.readouterr().out

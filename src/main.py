@@ -1,13 +1,15 @@
-"""应用入口（Phase 1）。
+"""应用入口（Phase 1 + Phase 2）。
 
-加载配置 → 初始化 SQLite → 拉一次所有 sheet → 打印摘要 → 退出。
-后续 phase 在此基础上加 UI / Bot / Scheduler。
+加载配置 → 初始化 SQLite → 拉一次所有 sheet → 打印摘要 → 启动 FastAPI UI。
+Phase 3+ 在此基础上加 Bot / Scheduler。
 """
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
+
+import uvicorn
 
 from src.config import load_config
 from src.sheets.auth import make_gspread_client
@@ -61,8 +63,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[warn] failed to snapshot {ss.name}: {e}")
 
     # 加载并打印映射
+    mapping_repo = MappingRepo(client)
     try:
-        mapping_repo = MappingRepo(client)
         mappings = mapping_repo.load_all()
         for m in mappings:
             store.save_mapping_snapshot(m)
@@ -70,4 +72,31 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         print(f"[warn] mapping load skipped: {e}")
 
+    # ========== Phase 2: 启动 FastUI ==========
+    # 把所有 deps 注入到 FastAPI app
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+    from src.web.refresher import BackgroundRefresher
+
+    cache = ProjectCache()
+    app = create_app(
+        cfg=cfg,
+        store=store,
+        sheet_repo=repo,
+        mapping_repo=mapping_repo,
+        bot_service=None,  # Phase 3 接入 BotService
+    )
+    app.state.cache = cache
+    app.state.refresher = BackgroundRefresher(repo, mapping_repo, store, cfg, cache)
+
+    print(f"[ui] Listening on http://{cfg.ui_bind}:{cfg.ui_port}")
+
+    # 单线程 uvicorn（避免 SQLite 并发问题；gspread 已通过 asyncio.to_thread 异步化）
+    uvicorn.run(
+        app,
+        host=cfg.ui_bind,
+        port=cfg.ui_port,
+        log_level="info",
+        access_log=False,
+    )
     return 0
