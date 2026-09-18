@@ -10,7 +10,7 @@ def _run_node(script: str) -> dict:
     result = subprocess.run(
         ["node", "-e", script],
         input=json.dumps({}),
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, encoding="utf-8", timeout=10,
     )
     if result.returncode != 0:
         raise RuntimeError(f"node failed: {result.stderr}")
@@ -37,7 +37,7 @@ console.log(JSON.stringify({{
 """
     result = subprocess.run(
         ["node", "--input-type=module", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, encoding="utf-8", timeout=10,
     )
     assert result.returncode == 0, result.stderr
     out = json.loads(result.stdout)
@@ -57,7 +57,7 @@ console.log(JSON.stringify(escapeHtml('<script>alert(1)</script>')));
 """
     result = subprocess.run(
         ["node", "--input-type=module", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, encoding="utf-8", timeout=10,
     )
     assert result.returncode == 0, result.stderr
     out = json.loads(result.stdout)
