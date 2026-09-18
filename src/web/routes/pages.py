@@ -129,3 +129,39 @@ async def overview(request: Request):
             "errors": ["无法连接 Google Sheets，检查凭证"] if error_banner_visible else [],
         },
     )
+
+
+@router.get("/project/{project_id}", response_class=HTMLResponse)
+async def project_detail(request: Request, project_id: str):
+    app = request.app
+    cache = app.state.cache
+    templates = app.state.templates
+
+    p = cache.get(project_id) if cache else None
+    if p is None:
+        return templates.TemplateResponse(
+            request=request, name="404.html",
+            context={"page_name": "404", "project_id": project_id,
+                     "last_refresh_at": None, "last_refresh_human": None,
+                     "errors": []},
+            status_code=404,
+        )
+
+    dwell = 0
+    if p.status_changed_at:
+        from datetime import datetime, timezone
+        dwell = max(0, int((datetime.now(timezone.utc) - p.status_changed_at).total_seconds()))
+    last = cache.last_refresh_at() if cache else None
+    last_human = last.strftime("%Y-%m-%d %H:%M:%S UTC") if last else None
+
+    return templates.TemplateResponse(
+        request=request, name="project_detail.html",
+        context={
+            "page_name": "detail",
+            "project": p,
+            "dwell_seconds": dwell,
+            "last_refresh_at": last.isoformat() if last else None,
+            "last_refresh_human": last_human,
+            "errors": [],
+        },
+    )
