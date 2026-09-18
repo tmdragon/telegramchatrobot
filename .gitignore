@@ -1,0 +1,40 @@
+# Secrets & credentials (never commit)
+config/secrets.yaml
+data/credentials/
+*.json.key
+*.pem
+
+# Local SQLite database & runtime data
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Spyder
+.spyproject/config/encoding.ini
+.spyproject/config/codestyle.ini
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.local
