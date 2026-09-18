@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}映射管理 — checkGPRobot{% endblock %}
+
+{% block content %}
+<main class="page page--mappings">
+  <header class="mappings-header">
+    <h1>项目 ↔ 群 映射管理</h1>
+    <button type="button" class="mappings-header__add"
+            data-action="mapping-add">+ 新增映射</button>
+  </header>
+
+  {% include "partials/_error_banner.html" %}
+
+  {% if mappings %}
+    <table class="mappings-table">
+      <thead>
+        <tr>
+          <th>项目编号</th>
+          <th>群 chat_id</th>
+          <th>备注</th>
+          <th>是否启用</th>
+          <th>上次播报时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody data-mappings-tbody>
+        {% for m in mappings %}
+          <tr class="mappings-row {% if not m.enabled %}row--warn{% endif %}"
+              data-project-id="{{ m.project_id }}">
+            <td><a href="/project/{{ m.project_id }}">{{ m.project_id }}</a></td>
+            <td>{{ m.chat_id or "—" }}</td>
+            <td>{{ m.note or "" }}</td>
+            <td>
+              {% if m.enabled %}
+                <span class="badge badge--ok">启用</span>
+              {% else %}
+                <span class="badge badge--off">停用</span>
+              {% endif %}
+            </td>
+            <td>{{ m.last_broadcast_at or "—" }}</td>
+            <td class="mappings-row__actions">
+              <button type="button" data-action="mapping-edit" data-project-id="{{ m.project_id }}">编辑</button>
+              <button type="button" data-action="mapping-delete" data-project-id="{{ m.project_id }}">删除</button>
+              <button type="button" data-action="test-send" data-project-id="{{ m.project_id }}"
+                      {% if not m.enabled %}disabled title="先启用映射"{% endif %}>📨 测试发送</button>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty-state">暂无映射，点上方"新增映射"开始。</p>
+  {% endif %}
+
+  {% include "partials/_mapping_modal.html" %}
+  {% include "partials/_confirm_dialog.html" %}
+</main>
+{% endblock %}

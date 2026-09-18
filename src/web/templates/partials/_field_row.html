@@ -1,0 +1,16 @@
+{# 单个字段行。参数: field (Field), sheet (SheetView) #}
+{% set field_id = sheet.sheet_name ~ "::" ~ sheet.sheet_name ~ "::" ~ field.row_index ~ "::" ~ field.column_index %}
+{% set is_locked = field.recognized_as in ["project_id"] %}
+<tr class="sheet-row"
+    data-field-id="{{ field_id }}"
+    data-original="{{ field.value }}">
+  <td class="field-cell__name">{{ field.name }}</td>
+  <td class="field-cell {% if is_locked %}field-cell--locked{% else %}field-cell--editable{% endif %}"
+      {% if not is_locked %}data-editable="true"{% endif %}
+      data-recognized-as="{{ field.recognized_as or '' }}">
+    <span class="field-cell__display">{{ field.value }}</span>
+    {% if is_locked %}
+      <span class="field-cell__lock-icon" aria-label="locked">🔒</span>
+    {% endif %}
+  </td>
+</tr>

@@ -1,0 +1,11 @@
+{# 顶部错误 banner：展示当前未处理的错误列表 #}
+{% if errors %}
+  <div class="error-banner" role="alert">
+    <strong class="error-banner__title">⚠ 拉取错误</strong>
+    <ul class="error-banner__list">
+      {% for msg in errors %}
+        <li class="error-banner__item">{{ msg }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}

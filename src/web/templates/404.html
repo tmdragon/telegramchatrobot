@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}404 — checkGPRobot{% endblock %}
+{% block content %}
+<main class="page page--404">
+  <h1>404 — 未找到项目</h1>
+  <p>项目 <code>{{ project_id }}</code> 不存在或尚未拉取到。</p>
+  <p><a href="/">← 返回总览</a></p>
+</main>
+{% endblock %}
