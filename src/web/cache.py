@@ -62,6 +62,33 @@ class ProjectCache:
     def empty(self) -> bool:
         return len(self._projects) == 0
 
+    def update_field_value(
+        self,
+        project_id: str,
+        spreadsheet_name: str,
+        sheet_name: str,
+        row: int,
+        col: int,
+        new_value: str,
+    ) -> str | None:
+        """更新 cache 中对应字段值；返回被替换的原值；若字段不存在返回 None。
+
+        注：调用方负责把 new_value 持久化（SheetRepo.update_cell + Store.record_status）。
+        这里仅同步内存视图。
+        """
+        p = self._projects.get(project_id)
+        if p is None:
+            return None
+        original = None
+        for sv in p.sheets:
+            if sv.sheet_name != sheet_name:
+                continue
+            for f in sv.fields:
+                if f.row_index == row and f.column_index == col:
+                    original = f.value
+                    f.value = new_value
+        return original
+
     def list_summaries(self, now: Optional[datetime] = None) -> list[ProjectSummary]:
         now = now or datetime.now(timezone.utc)
         out: list[ProjectSummary] = []
