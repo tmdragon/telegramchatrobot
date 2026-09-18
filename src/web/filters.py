@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from markupsafe import Markup
+
 from src.models.status import StatusCode
 
 
@@ -31,11 +33,15 @@ STATUS_DISPLAY: dict[StatusCode, tuple[str, str]] = {
 }
 
 
-def status_badge(code: StatusCode | None, raw: Optional[str] = None) -> str:
-    """渲染状态徽章 HTML。code 已知则按映射渲染；否则展示 raw（用"未知"样式）。"""
+def status_badge(code: StatusCode | None, raw: Optional[str] = None) -> Markup:
+    """渲染状态徽章 HTML。code 已知则按映射渲染；否则展示 raw（用"未知"样式）。
+
+    返回 markupsafe.Markup 以告知 Jinja2 不要转义（autoescape=True）。
+    humanize_duration 是纯文本，不应包 Markup。
+    """
     if code is not None and code in STATUS_DISPLAY:
         modifier, name = STATUS_DISPLAY[code]
-        return (
+        return Markup(
             f'<span class="status-badge status-badge--{modifier}" '
             f'data-status-code="{code.value}">'
             f'<span class="status-badge__dot" aria-hidden="true"></span>'
@@ -43,7 +49,7 @@ def status_badge(code: StatusCode | None, raw: Optional[str] = None) -> str:
             f"</span>"
         )
     text = raw if raw else "未知"
-    return (
+    return Markup(
         f'<span class="status-badge status-badge--unknown" '
         f'data-status-code="">'
         f'<span class="status-badge__dot" aria-hidden="true"></span>'

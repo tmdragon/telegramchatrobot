@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import markupsafe
+
 from src.models.status import StatusCode
 from src.web.filters import status_badge, humanize_duration
 
@@ -8,6 +10,20 @@ def test_status_badge_known_code():
     html = status_badge(StatusCode.MAKING)
     assert "我方制作中" in html
     assert "status-badge" in html
+
+
+def test_status_badge_returns_markup():
+    """Regression: status_badge must return a Markup object so Jinja2's
+    autoescape does not HTML-escape the badge into literal text.
+    See final-review whole-branch review (fix #1).
+    """
+    result = status_badge(StatusCode.MAKING)
+    assert isinstance(result, markupsafe.Markup), (
+        f"status_badge must return Markup to bypass Jinja2 autoescape; "
+        f"got {type(result).__name__}"
+    )
+    # Markup instances expose __html__ which Jinja2 checks before escaping.
+    assert hasattr(result, "__html__")
 
 
 def test_status_badge_unknown_renders_raw():
