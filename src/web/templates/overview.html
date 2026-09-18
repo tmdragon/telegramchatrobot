@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}项目总览 — checkGPRobot{% endblock %}
+
+{% block content %}
+<main class="page page--overview">
+  <h1 class="page__title">项目管理</h1>
+
+  {% include "partials/_error_banner.html" %}
+
+  {% if summaries %}
+    <table class="overview-table">
+      <thead>
+        <tr>
+          <th>项目编号</th>
+          <th>项目名</th>
+          <th>当前状态</th>
+          <th>在当前状态停留</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in summaries %}
+          <tr class="overview-row" data-project-id="{{ s.project_id }}">
+            <td>
+              <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
+            </td>
+            <td>{{ s.project_name or "—" }}</td>
+            <td>
+              {% with code=s.status, raw=s.status.value if s.status else None %}
+                {% include "partials/_status_badge.html" %}
+              {% endwith %}
+            </td>
+            <td>{{ s.dwell_seconds | humanize_duration }}</td>
+            <td>
+              <a href="/project/{{ s.project_id }}" class="overview-row__view">查看</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty-state">暂无项目</p>
+  {% endif %}
+</main>
+{% endblock %}

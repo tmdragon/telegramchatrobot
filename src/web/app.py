@@ -57,4 +57,8 @@ def create_app(
     def health() -> JSONResponse:
         return JSONResponse({"status": "ok"})
 
+    # 路由（T3 注册 overview，T5 注册 project detail，T10a 注册 mappings）
+    from src.web.routes import pages as pages_routes
+    app.include_router(pages_routes.router)
+
     return app
