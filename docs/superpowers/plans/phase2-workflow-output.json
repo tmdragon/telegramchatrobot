@@ -1,0 +1,401 @@
+{
+  "plan": {
+    "title": "Phase 2 UI - FastAPI + Jinja2 + vanilla JS implementation plan",
+    "overview": "Twelve bite-sized tasks that build the Phase 2 local UI for checkGPRobot on top of Phase 1's SheetRepo/MappingRepo/Store modules. Each task leaves the test suite green (python -m pytest) and ends with a commit. Tasks proceed in dependency order: deps+skeleton -> factory+filters+base layout -> overview HTML -> overview JSON+refresh -> project detail HTML+JSON -> field edit PUT with verification -> static JS core modules -> status-bar/auto-refresh JS -> inline-edit JS + field_row partial polish -> mappings page + CRUD endpoints -> test-send + mapping-crud JS + chat-id helper -> main.py uvicorn wiring + README + E2E integration test. All UI code lives under src/web/ (templates, static, routes, filters, cache, refresher); main.py at the project root owns the uvicorn entrypoint. No SPA, no auth, no middleware beyond default CORS; server binds 127.0.0.1:8765 single-thread no-reload, and a ProjectCache hydrated from SQLite on startup is refreshed by SheetRepo.fetch_all on the background refresher thread.",
+    "task_count": 12,
+    "tasks": [
+      {
+        "n": 1,
+        "title": "Add web dependencies and src/web/ skeleton",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/__init__.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/.gitkeep",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/.gitkeep",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_web_smoke.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/requirements.txt"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_web_smoke.py"
+        ],
+        "depends_on": [],
+        "key_concepts": [
+          "append fastapi, uvicorn[standard], jinja2 to requirements.txt (no new runtime deps beyond what spec mandates)",
+          "create empty src/web/ Python package, src/web/templates/, src/web/static/ trees with .gitkeep so git tracks the dirs",
+          "smoke test asserts 'import src.web' succeeds and the package has no required imports yet"
+        ]
+      },
+      {
+        "n": 2,
+        "title": "FastAPI app factory, Jinja2 filters, base layout, /health",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/app.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/filters.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/base.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/partials/_status_bar.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/partials/_status_badge.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/partials/_error_banner.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/css/app.css",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_health.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_filters.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_app_factory.py"
+        ],
+        "files_modified": [],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_health.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_filters.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_app_factory.py"
+        ],
+        "depends_on": [
+          1
+        ],
+        "key_concepts": [
+          "create_app(cfg, store, sheet_repo, mapping_repo, bot_service, broadcaster) -> FastAPI stores deps on app.state",
+          "register two Jinja2 custom filters from filters.py: status_badge (StatusCode -> colored dot + Chinese name + dwell suffix) and humanize_duration (seconds -> '2 天 3 小时' / '15 分钟' / '-')",
+          "base.html extends with {% block content %}, includes _status_bar.html, sets <body data-page=...>, links /static/css/app.css and a deferred /static/js/page-bootstrap.js",
+          "GET /health -> {'status':'ok'} 200, no auth, no middleware beyond default CORS (per YAGNI)"
+        ]
+      },
+      {
+        "n": 3,
+        "title": "ProjectCache stub + overview HTML route + overview template",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/cache.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/__init__.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/pages.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/overview.html",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_overview_route.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/app.py"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_overview_route.py"
+        ],
+        "depends_on": [
+          2
+        ],
+        "key_concepts": [
+          "ProjectCache.snapshot() returns list[ProjectSummary]; dwell_seconds computed from last_refresh_at against now (injected via global_context)",
+          "render_overview reads app.state.cache, falls back to Store.load_latest_snapshot per spreadsheet when cache is empty (cold start hydration)",
+          "overview.html extends base.html, iterates projects, renders status badge via status_badge filter, dwell via humanize_duration, links to /project/{id}",
+          "empty-state row shows '无法连接 Google Sheets，检查凭证' when error_count>0, else '暂无项目'"
+        ]
+      },
+      {
+        "n": 4,
+        "title": "Overview JSON snapshot endpoint + manual refresh endpoint + BackgroundRefresher stub",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/refresher.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/api.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_projects.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_refresh.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/app.py"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_projects.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_refresh.py"
+        ],
+        "depends_on": [
+          3
+        ],
+        "key_concepts": [
+          "GET /api/projects -> {last_refresh_at, projects:[...], error_count} from cache.snapshot(); 503 when cache and Store both empty (cold start failure)",
+          "POST /api/refresh body {spreadsheet_names|null} calls BackgroundRefresher.refresh_now and returns {refreshed_at, project_count, per_spreadsheet:[{spreadsheet_name, ok, error, fetched_rows}]}",
+          "BackgroundRefresher.refresh_now awaits SheetRepo.fetch_all, persists via Store.save_snapshot, updates ProjectCache, sets last_refresh_at + per_ss error list",
+          "partial-failure contract: per_spreadsheet ok=false rows surface as banner in UI without blanking existing snapshot"
+        ]
+      },
+      {
+        "n": 5,
+        "title": "Project detail HTML route + detail template + detail JSON endpoint + 404",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/project_detail.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/partials/_field_row.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/404.html",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_project_detail_route.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_project_detail.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/pages.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/api.py"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_project_detail_route.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_project_detail.py"
+        ],
+        "depends_on": [
+          4
+        ],
+        "key_concepts": [
+          "GET /project/{project_id} returns 200 + detail page; 404 page (templates/404.html) when cache miss",
+          "field_id encoded as {spreadsheet}::{sheet}::{row}::{col} URL-encoded on each Field so inline-edit PUT can decode it server-side",
+          "_field_row partial renders locked badge (recognized_as in {project_id,status,project_name}) with class 'field-cell--locked' or data-editable on the rest",
+          "GET /api/projects/{project_id} returns full payload {project:{...sheets:[{spreadsheet_name,sheet_name,fetched_at,fields:[{field_id,name,value,recognized_as,editable}]}], status_history}, last_refresh_at}"
+        ]
+      },
+      {
+        "n": 6,
+        "title": "Field edit PUT endpoint with write verification, locked-field guard, 409 rollback",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_field_edit.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/api.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/cache.py"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_field_edit.py"
+        ],
+        "depends_on": [
+          5
+        ],
+        "key_concepts": [
+          "PUT /api/projects/{id}/fields/{field_id} body {new_value} decodes field_id, calls SheetRepo.update_cell, then read-back verifies within write/verify window",
+          "200: returns {field_id, value (verified), updated_at, status_changed, new_status_code} when write+verify succeed",
+          "400: field is recognized_as project_id (locked) OR new_value empty after strip; 404: project_id or field_id not in current snapshot",
+          "409: SheetRepo.WriteVerificationError -> response carries {original_value} so UI can roll back without losing data (spec 5.5)",
+          "502: gspread transport error; Store.record_status called when status text changed, ProjectCache updated atomically"
+        ]
+      },
+      {
+        "n": 7,
+        "title": "Static JS core modules + page dispatcher + StaticFiles mount",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/api.js",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/dom.js",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/status-badge.js",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/time.js",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/page-bootstrap.js",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_static_served.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/base.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/app.py"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_static_served.py"
+        ],
+        "depends_on": [
+          6
+        ],
+        "key_concepts": [
+          "api.js: getJson/postJson/putJson/delJson wrappers throwing ApiError{status,message,detail} on non-2xx (~40 LOC)",
+          "dom.js: $(sel,root=document), el(tag,attrs,...children), escapeHtml helpers (~30 LOC)",
+          "status-badge.js: STATUS_META StatusCode->{modifier,displayName} map + renderBadge(codeOrNull, rawText) returning BEM HTML; unknown code -> '⚪ 未知 <raw>'",
+          "time.js: formatDwell(seconds) (matches Jinja humanize_duration), formatRelative(iso) '2 分钟前', formatThreshold(dwellSec,thresholdDays,statusCode) -> {warn:true}",
+          "page-bootstrap.js: reads body[data-page] and dynamic-imports the matching feature module; base always loads status-bar+auto-refresh",
+          "app.mount('/static', StaticFiles(directory='src/web/static'), name='static'); templates reference /static/... via Jinja url_for"
+        ]
+      },
+      {
+        "n": 8,
+        "title": "Status bar + auto-refresh JS modules with EventTarget bus and Page Visibility",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/status-bar.js",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/auto-refresh.js",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_status_bar_module.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_auto_refresh_module.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/css/app.css"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_status_bar_module.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_auto_refresh_module.py"
+        ],
+        "depends_on": [
+          7
+        ],
+        "key_concepts": [
+          "status-bar.js: mount(#status-bar); exposes {mount, on, emit, errors} with EventTarget emitting 'refresh:start|done|error'; errors.bump(reason) increments badge and appends to recent-5 list",
+          "auto-refresh toggle persisted to localStorage key 'cgr.autoRefresh' (default true); clicking badge expands panel, dblclick clears count",
+          "auto-refresh.js: setInterval(60_000) calls page-specific GET endpoint (overview/detail/mappings), replaces tbody/.sheet-table innerHTML in place keeping scroll",
+          "Page Visibility API pauses tick on hidden and resumes on visible AND autoOn; failed refresh keeps previous DOM and emits refresh:error toast",
+          "manual refresh button POSTs /api/refresh then re-runs page data refresh; CSS adds .status-bar layout (Flexbox) + spinner keyframes + .toast fade-in/out"
+        ]
+      },
+      {
+        "n": 9,
+        "title": "Inline-edit JS module + field_row partial polish + CSS edit/locked/error states",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/inline-edit.js",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_inline_edit.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/partials/_field_row.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/css/app.css"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_inline_edit.py"
+        ],
+        "depends_on": [
+          8
+        ],
+        "key_concepts": [
+          "event delegation on .sheet-table tbody; click .field-cell[data-editable] swaps textContent for <input> + confirm/cancel buttons",
+          "Enter confirms, Esc cancels, click outside cancels; keyboard accessibility without ARIA framework",
+          "optimistic update on click of confirm: cell shows new text immediately, then PUT /api/projects/{id}/fields/{field_id}",
+          "on ApiError: restore data-original, add .field-cell--error with title tooltip 'WriteVerificationError: ...', call status-bar.errors.bump(reason); do NOT clear data-original so retry sees truth",
+          "recognized_as set fields render .field-cell--locked (no data-editable, no click handler); CSS adds .field-cell--editing / --error / --locked modifiers"
+        ]
+      },
+      {
+        "n": 10,
+        "title": "Mappings page HTML route + template + modal partials + CRUD JSON endpoints",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/mappings.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/partials/_mapping_modal.html",
+          "D:/soft/checkGPRobot/.spyproject/src/web/templates/partials/_confirm_dialog.html",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_mappings_route.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_mappings_crud.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/pages.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/api.py"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_mappings_route.py",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_api_mappings_crud.py"
+        ],
+        "depends_on": [
+          9
+        ],
+        "key_concepts": [
+          "GET /mappings renders table from MappingRepo.load_all + Store overlay; embeds admin_chat_id (from cfg) for chat-id helper box",
+          "POST /api/mappings body {project_id, chat_id, note, enabled} validates project_id non-empty + chat_id signed-int; 400 on missing/duplicate, 201 on create via MappingRepo.upsert + Store.save_mapping_snapshot",
+          "PUT /api/mappings/{project_id} accepts any subset of {chat_id,note,enabled}, preserves last_broadcast_at from existing record",
+          "DELETE /api/mappings/{project_id} is soft-delete via MappingRepo.delete (sets enabled=FALSE on sheet, per spec 4.2); returns 200 with {project_id, enabled:false, deleted_at}, never purges SQLite",
+          "_mapping_modal uses native <dialog> + data-modal-target attrs; _confirm_dialog is generic two-button dialog bound via data-confirm-target"
+        ]
+      },
+      {
+        "n": 11,
+        "title": "Test-send endpoint + mapping-crud JS + test-send JS modules + chat-id helper",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/mapping-crud.js",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/js/test-send.js",
+          "D:/soft/checkGPRobot/.spyproject/tests/test_test_send.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/src/web/routes/api.py",
+          "D:/soft/checkGPRobot/.spyproject/src/web/static/css/app.css"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_test_send.py"
+        ],
+        "depends_on": [
+          10
+        ],
+        "key_concepts": [
+          "POST /api/mappings/{id}/test-send body {message?} default '📨 测试发送 from checkGPRobot UI'; calls BotService.send when available, returns 503 when bot_service is None with clear 'UI-only boot' message",
+          "per spec 4.2 server does NOT update last_broadcast_at on test send - the mapping record is untouched, only the toast reflects outcome",
+          "mapping-crud.js: openModal(mode, mapping?), submit (POST or PUT), softDelete with two-step confirm via _confirm_dialog; optimistic row insert/edit/replace then rollback + .row--error on ApiError",
+          "loadChatIdHelper fetches GET /api/auth/chat-id lazily (admin-only, returns None or signed int), copies value to clipboard; empty state explains @userinfobot workflow",
+          "test-send.js: click [data-test-send] disables button + spinner, POSTs, renders transient .toast (4s auto-dismiss, fade keyframe); disabled mapping -> button rendered disabled with tooltip '先启用映射'",
+          "CSS adds .modal/.modal--open, .toast/.toast--error, .row--warn, .row--error BEM modifiers"
+        ]
+      },
+      {
+        "n": 12,
+        "title": "main.py uvicorn wiring + README + end-to-end integration test (full UI flow)",
+        "files_created": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_e2e_flow.py"
+        ],
+        "files_modified": [
+          "D:/soft/checkGPRobot/.spyproject/main.py",
+          "D:/soft/checkGPRobot/.spyproject/README.md"
+        ],
+        "tests": [
+          "D:/soft/checkGPRobot/.spyproject/tests/test_e2e_flow.py"
+        ],
+        "depends_on": [
+          11
+        ],
+        "key_concepts": [
+          "main.py wires Phase 1 dependencies then calls uvicorn.run(app, host=cfg.ui_bind, port=cfg.ui_port, log_level='info') single-thread, no reload - matches spec 5.1 'Jinja2 + vanilla JS, no SPA'",
+          "README documents 'python -m checkGPRobot' or 'uvicorn checkGPRobot.web.app:create_app' usage, lists three pages (/, /project/{id}, /mappings), notes 127.0.0.1:8765 bind and Phase 1 config keys",
+          "E2E test uses FastAPI TestClient against a fixture app with stub SheetRepo/MappingRepo/Store: GET / -> 200 with project rows; PUT /api/projects/{id}/fields/{field_id} -> 200 with verified value; GET /mappings -> 200; POST /api/mappings -> 201; POST /api/mappings/{id}/test-send -> 200 (or 503 when bot_service=None)",
+          "verifies static assets served at /static/css/app.css and /static/js/*.js and template HTML contains expected status badge + dwell text per spec 5.2",
+          "guards cold start: cache-empty + Store-empty returns 503 from /api/projects with clear message; locked field PUT returns 400; verification mismatch returns 409 with original_value"
+        ]
+      }
+    ]
+  },
+  "critique": {
+    "spec_coverage": {
+      "section_5_1_three_pages": "covered by task 2 (FastAPI app + Jinja2), task 3 (overview route), task 5 (detail route), task 10 (mappings route), task 12 (uvicorn bind 127.0.0.1:8765).",
+      "section_5_2_overview": "covered by task 3 (overview template + status_badge + humanize_duration), task 4 (/api/projects JSON + /api/refresh), task 8 (status bar + auto-refresh toggle + error badge), plus empty-state banner per spec wording.",
+      "section_5_3_project_detail": "covered by task 5 (detail template, _field_row partial, locked badge), task 6 (PUT field with optimistic + verification), task 9 (inline-edit JS). GAP: spec 5.3 says ONLY project_id is locked (in sub-tables), but plan task 5 marks {project_id, status, project_name} all locked and task 6 only enforces 400 for project_id, creating a server/UI mismatch.",
+      "section_5_4_mappings": "covered by task 10 (mappings page + CRUD endpoints + soft-delete + confirm dialog), task 11 (test-send endpoint + chat-id helper).",
+      "section_5_5_errors": "covered by task 2 (partials/_error_banner.html), task 3 (empty-state banner copy), task 4 (partial-failure per-spreadsheet contract + last_refresh_at), task 8 (refresh:error toast, paused-on-hidden), task 9 (rollback preserves data-original + error tooltip).",
+      "section_10_1_directory_structure": "GAP: spec 10.1 lists `src/main.py` as the entrypoint and 10.2 mandates `python run.py`; task 12 instead creates/modifies `D:/soft/checkGPRobot/.spyproject/main.py` at the project root (which doesn't exist in the tree — Phase 1 has `src/main.py` plus `run.py`). Plan must modify `src/main.py` and not introduce a root `main.py`. README key_concepts also cite `python -m checkGPRobot` and `uvicorn checkGPRobot.web.app:create_app`, neither of which matches spec 10.2 (`python run.py`) or the Phase 1 layout (`src/web/`, `run.py`)."
+    },
+    "yagni_violations": [
+      "Task 2 injects a `broadcaster` dependency into create_app() but no later task references it; Phase 1 does not define a Broadcaster class. Either drop the param or move it to a later phase.",
+      "Task 2 key_concepts mention 'default CORS' middleware but FastAPI has no CORS by default and the UI is same-origin (127.0.0.1:8765), so no CORS middleware is needed; the phrasing is misleading and suggests middleware that should be explicitly removed.",
+      "Task 5 marks {project_id, status, project_name} all locked with field-cell--locked class, expanding beyond spec 5.3 which only locks project_id in sub-tables. Status is meant to change via state machine; project_name should be editable.",
+      "Task 11 key_concepts introduce an undocumented `/api/auth/chat-id` endpoint with no task defining it (route file, handler, signature, or test) — this is an out-of-thin-air dependency."
+    ],
+    "task_decomposition": {
+      "well_sized": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        8,
+        9,
+        11,
+        12
+      ],
+      "too_big": [
+        2,
+        7,
+        10
+      ],
+      "too_small": [],
+      "rationale": "Task 2 creates 10 files in one commit (app factory + 2 filters + base layout + 3 partials + CSS + 3 test files); should split the partials (status_bar/status_badge/error_banner) into a separate task 2b. Task 7 ships 5 JS modules plus a StaticFiles mount plus template edit; the StaticFiles mount and dispatcher wiring is small but distinct from the api/dom/status-badge/time helper modules which are independently testable — split JS-helpers (api/dom/time) from page-dispatcher+StaticFiles. Task 10 mixes routes, 2 modal partials, page template, 2 test files; modal partials can split into task 10b."
+    },
+    "cross_task_dependencies": [
+      "field_id encoding `{spreadsheet}::{sheet}::{row}::{col}` must be precisely defined: Phase 1 SheetView uses `spreadsheet_id` (config id) but SheetRepo.update_cell takes `spreadsheet_name` (friendly name passed to gspread). Task 5 encodes, task 6 decodes + resolves id→name, task 9 (JS) rebuilds it on PUT. Decide: encode spreadsheet_name directly, or keep id and require task 6 to look up name via cfg.spreadsheets.",
+      "Store method name: plan task 4 says `Store.save_snapshot` but Phase 1 ships `Store.save_sheet_snapshot(spreadsheet_id, sheet_name, fetched_at, rows_json, parse_errors)`. Rename in plan or alias it. Also plan says `Store.load_latest_snapshot` returns `per_spreadsheet` snapshots — verify Phase 1 signature matches.",
+      "Recognized-as locked set must be a single constant shared between task 5 (_field_row partial class), task 6 (PUT 400 guard), task 9 (inline-edit skip list). Spec 5.3 says only project_id is locked — align the constant to {project_id}.",
+      "StatusCode→displayName mapping: Phase 1 models.status has alias table; task 2 (filters.status_badge) and task 7 (status-badge.js STATUS_META) must derive from the same source (e.g., JSON dump of Phase 1 alias table into static/js/status-data.js) to avoid drift between Python filter and JS badge.",
+      "humanize_duration (task 2 Jinja filter) and formatDwell (task 7 time.js) must agree on edge cases (zero, negative, threshold days). Document shared spec or share the formatter.",
+      "ApiError shape {status, message, detail} defined in task 7 api.js must match the JSON bodies returned by /api/refresh, PUT field (502/409/400), POST mappings (400/201), test-send (503/200).",
+      "CSS BEM class names (.field-cell--{locked,editing,error}, .status-bar, .toast, .toast--error, .modal--open, .row--{warn,error}) are referenced across tasks 5,7,8,9,10,11; consolidate the catalog in task 7 or 8 before later tasks touch CSS.",
+      "body[data-page] dispatcher contract (task 7 page-bootstrap.js) — each page module's export shape (init(mountEl)? default-export factory?) must be agreed before tasks 8/9/10/11.",
+      "Broadcaster argument in create_app (task 2) has no consumer — drop the parameter or add a real consumer (Phase 3 territory, currently YAGNI)."
+    ],
+    "risks": [
+      "main.py location vs spec: task 12 modifies `main.py` at the project root, but spec 10.1 places it at `src/main.py` and Phase 1 already has `run.py` + `src/main.py`; the plan as written would create a duplicate entrypoint and never wire uvicorn into the actual entrypoint.",
+      "SheetRepo.fetch_all and update_cell are synchronous (gspread is sync); BackgroundRefresher.refresh_now (task 4) awaits them inside FastAPI request handling — under uvicorn single-thread this will block the event loop. Either run them via run_in_executor, or mark BackgroundRefresher explicitly as a thread/task not a coroutine.",
+      "Inline-edit event delegation (task 9) targets `.sheet-table tbody`, but auto-refresh (task 8) replaces `.sheet-table innerHTML` in place — delegated handlers on the old tbody are GC'd. Either delegate on `document`/stable ancestor, or re-bind on each refresh. Plan does not say.",
+      "Jinja2 autoescape is on by default for .html; task 7's escapeHtml helper would double-escape if applied to data already autoescaped. Plan should restrict escapeHtml to JS template strings, not to values injected into DOM via textContent (which is already safe).",
+      "/api/auth/chat-id referenced in task 11 has no implementation task, no test, and no signature — risk of silent gap.",
+      "Field_id URL-encoding of `{spreadsheet}::{sheet}::{row}::{col}` collides if any segment contains `::`; spec does not forbid it. Plan must specify a delimiter that cannot appear in spreadsheet/sheet names, or hash the id.",
+      "Recognized-as lock inconsistency: task 5 UI says locked for {project_id, status, project_name}, task 6 server returns 400 only for project_id — user will click an unlocked-looking UI affordance and lose their edit.",
+      "Test-send (task 11) calls BotService.send, but Phase 1 has no bot module. Plan correctly tolerates bot_service=None (503). However, Phase 2 wiring in create_app will need to accept None and skip broadcast wiring — confirm main.py / run.py flow when BotService is not yet implemented.",
+      "Cold-start 503 contract (task 4) when both cache and Store empty — but spec 7.2 says UI must always load SQLite snapshot first; verify Store.load_latest_snapshot returns per-spreadsheet list (Phase 1 has `load_latest_snapshot` but the plan calls it per-spreadsheet — confirm return shape).",
+      "MappingRepo.delete contract: plan task 10 says soft-delete (enabled=false). Phase 1 delete() must be confirmed to soft-delete rather than purge; if it purges, plan must adapt.",
+      "README startup command in task 12 cites `python -m checkGPRobot` and `uvicorn checkGPRobot.web.app:create_app`, but Phase 1 ships `src/web/...` and `run.py` at root — neither invocation works without adding an alias or restructuring."
+    ],
+    "verdict": "NEEDS_FIXES",
+    "fix_requests": [
+      "Replace `D:/soft/checkGPRobot/.spyproject/main.py` (root) with `D:/soft/checkGPRobot/.spyproject/src/main.py` (Phase 1 location per spec 10.1) in task 12. The Phase 1 file already exists; task 12 should extend it to call uvicorn.run(app, ...) instead of (or after) the existing entrypoint. Also update README to use `python run.py` per spec 10.2 instead of `python -m checkGPRobot`.",
+      "Drop the unused `broadcaster` parameter from create_app (task 2) until a consumer exists; or move bot/broadcast wiring to Phase 3 and inject None for Phase 2.",
+      "Define /api/auth/chat-id as an explicit route + test in either task 10 or 11 — give it an actual task entry with files_created and tests, or remove the chat-id helper from Phase 2.",
+      "Reconcile the locked-field set with spec 5.3: only project_id (in sub-tables) is locked. Adjust task 5 (_field_row partial class list), task 6 (PUT 400 guard), and task 9 (inline-edit skip) to share a single LOCKED_RECOGNIZED_AS = {\"project_id\"} constant.",
+      "Spell out the field_id encoding in task 5 (and reuse in task 6, task 9) including: which spreadsheet identifier (id or name), the exact delimiter (must not collide with `::` in names), and the URL-encoding strategy. Decide between (a) embedding spreadsheet_name directly, or (b) embedding spreadsheet_id and resolving to name in task 6 via cfg.spreadsheets lookup.",
+      "Correct Store method names to match Phase 1: use `Store.save_sheet_snapshot` (not `save_snapshot`) and confirm `Store.load_latest_snapshot` returns the per-spreadsheet shape plan task 4 expects.",
+      "Split task 2 into 2a (filters + base.html + app factory + /health) and 2b (partials + css + app factory test). Split task 7 into 7a (api/dom/time helpers + api.js contract) and 7b (status-badge.js + dispatcher + StaticFiles mount). Split task 10 into 10a (page template + 2 modal partials + route) and 10b (CRUD endpoints + tests).",
+      "Specify that SheetRepo.fetch_all/update_cell are wrapped in asyncio.to_thread (or BackgroundRefresher runs in a worker thread) so the single-thread uvicorn loop is not blocked during a 60s tick. Add a brief note in task 4 and task 6.",
+      "Change inline-edit delegation target from `.sheet-table tbody` (which gets replaced by auto-refresh) to a stable ancestor (`.sheet-section` or document). Update task 9 key_concepts.",
+      "Remove the 'default CORS' wording in task 2 — same-origin UI requires no CORS middleware. If a later task adds cross-origin (it doesn't per spec), reintroduce then."
+    ]
+  }
+}
