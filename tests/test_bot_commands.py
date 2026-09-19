@@ -59,18 +59,56 @@ def test_is_admin_false_when_mismatch():
 
 # ---------- /help ----------
 
-async def test_help_cmd_replies_with_command_list():
-    u = _make_update(user_id=42)
+async def test_help_cmd_public_for_customer_chat():
+    """客户群：/help 只显示 /projects、/status 及详细使用说明。"""
+    u = _make_update(user_id=42, chat_id=-100123)  # 非 admin
     c = _make_context()
+    c.bot_data = {"admin_chat_id": ADMIN_ID, "admin_broadcast_chats": []}
     await help_cmd(u, c)
     u.message.reply_text.assert_awaited_once()
     text = u.message.reply_text.await_args.args[0]
-    assert "/status" in text
+    # 客户群应看到
     assert "/projects" in text
+    assert "/status" in text
     assert "/help" in text
-    assert "/force_broadcast" in text  # wrapped in backticks (no MarkdownV2 escaping needed)
+    # /status 使用说明要点
+    assert "项目编号" in text
+    assert "包名" in text
+    assert "项目名" in text
+    # 不应看到管理员指令
+    assert "/force_broadcast" not in text
+    assert "/reload" not in text
+    assert "/dryrun" not in text
+    assert "/chatid" not in text
+
+
+async def test_help_cmd_admin_for_admin_chat():
+    """管理员 / 内部群：/help 显示完整指令。"""
+    u = _make_update(user_id=ADMIN_ID, chat_id=ADMIN_ID)
+    c = _make_context()
+    c.bot_data = {"admin_chat_id": ADMIN_ID, "admin_broadcast_chats": []}
+    await help_cmd(u, c)
+    text = u.message.reply_text.await_args.args[0]
+    assert "/projects" in text
+    assert "/status" in text
+    assert "/force_broadcast" in text
     assert "/reload" in text
     assert "/dryrun" in text
+    assert "/chatid" in text
+
+
+async def test_help_cmd_admin_for_internal_broadcast_chat():
+    """内部管理群（admin_broadcast_chats）：也是完整指令。"""
+    internal_chat = "-1004465951132"
+    u = _make_update(user_id=42, chat_id=internal_chat)
+    c = _make_context()
+    c.bot_data = {
+        "admin_chat_id": ADMIN_ID,
+        "admin_broadcast_chats": [internal_chat],
+    }
+    await help_cmd(u, c)
+    text = u.message.reply_text.await_args.args[0]
+    assert "/force_broadcast" in text
 
 
 # ---------- /status ----------

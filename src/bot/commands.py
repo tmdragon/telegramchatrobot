@@ -26,15 +26,50 @@ if TYPE_CHECKING:
     from src.bot.broadcast import BroadcastSvc
 
 
-HELP_TEXT = (
-    "🤖 *checkGPRobot*\n\n"
-    "`/status PRJ-XXX` — 查看项目当前状态\n"
-    "`/projects` — 列出所有项目\n"
-    "`/chatid` — 显示当前 chat 的 ID（管理员自助查群 ID）\n"
-    "`/help` — 帮助\n"
-    "`/force_broadcast` — 立即全员播报（管理员）\n"
-    "`/reload` — 重读所有配置（管理员）\n"
-    "`/dryrun` — 渲染文案预览，不发送（管理员）"
+HELP_PUBLIC = (
+    "🤖 *checkGPRobot* — 客户群可用指令\n\n"
+    "*📋 `/projects`*\n"
+    "列出本群映射的所有项目（含状态、停留时长）\n\n"
+    "*📊 `/status <查询>`*\n"
+    "查看项目当前状态。`查询` 支持以下三种形式：\n\n"
+    "  1. *项目编号*（精确）\n"
+    "     `/status PAK-001`\n"
+    "     返回：项目名 / 包名 / 当前状态 / 停留时长\n\n"
+    "  2. *包名*（模糊匹配）\n"
+    "     `/status com.example.game1`\n"
+    "     例如包名 `com.example.game1` 即匹配；大小写不敏感\n\n"
+    "  3. *项目名*（模糊匹配）\n"
+    "     `/status Tower up up`\n"
+    "     部分关键词即可（如 `Tower` 也能匹配）\n\n"
+    "  多个匹配 → 列出候选项目，让你用编号精确查：\n"
+    "  `🔍 多个匹配 \`<查询>\`，请用编号：`\n"
+    "  `  • \`PRJ-001\` 项目一 包名 \`com.example.game1\``\n\n"
+    "*📞 联系管理员*\n"
+    "遇到问题或需新指令，找管理员（机器人不报错就算正常）\n\n"
+    "*❓ `/help`*\n"
+    "  显示本帮助"
+)
+
+HELP_ADMIN = (
+    "🤖 *checkGPRobot* — 管理员指令\n\n"
+    "*📋 `/projects`*\n"
+    "  列出所有项目（不限于本群）\n\n"
+    "*📊 `/status <查询>`*\n"
+    "  支持编号 / 包名 / 项目名 三种查询（详见客户群 /help）\n\n"
+    "*🔄 `/force_broadcast`*\n"
+    "  立即触发全员播报（不等到下个 cron tick）\n"
+    "  ⚠ 不带 skip 跳过——会发\"无变化\"的项目到所有群\n\n"
+    "*🔃 `/reload`*\n"
+    "  重读所有配置（secrets.yaml / sheets.yaml）\n"
+    "  适用：修改 sheet 配置、新增 spreadsheet 后\n\n"
+    "*🧪 `/dryrun`*\n"
+    "  渲染播报文案预览，不实际发送\n"
+    "  用途：调试模板、查看即将发送的内容\n\n"
+    "*🆔 `/chatid`*\n"
+    "  显示当前 chat 的 ID（私聊或群）\n"
+    "  用途：配置 admin_broadcast_chats 时需要群 ID\n\n"
+    "*❓ `/help`*\n"
+    "  显示本帮助"
 )
 
 
@@ -173,7 +208,13 @@ async def projects_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _reply(update, HELP_TEXT)
+    chat = update.effective_chat
+    chat_id_str = str(chat.id) if chat else ""
+    admin_id = context.bot_data.get("admin_chat_id", 0)
+    admin_broadcast_chats = context.bot_data.get("admin_broadcast_chats") or []
+    privileged = _is_privileged_chat(chat_id_str, admin_id, admin_broadcast_chats)
+    # 客户群只看公开指令；管理员 / 内部群看完整指令
+    await _reply(update, HELP_ADMIN if privileged else HELP_PUBLIC)
 
 
 async def chatid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
