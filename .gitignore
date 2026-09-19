@@ -4,6 +4,14 @@ data/credentials/
 *.json.key
 *.pem
 
+# Local runtime config (per-developer; .example templates tracked instead)
+config/scheduler.yaml
+config/sheets.yaml
+config/vcs.ini
+config/encoding.ini
+config/codestyle.ini
+config/defaults/
+
 # Local SQLite database & runtime data
 data/*.db
 data/*.db-journal
@@ -13,6 +21,9 @@ data/*.db-shm
 # Logs
 logs/
 *.log
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
 
 # Python
 __pycache__/
