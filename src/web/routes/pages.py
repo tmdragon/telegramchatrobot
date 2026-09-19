@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from src.models.project import Field, Project, SheetView
+from src.bot import templates as bot_templates
 
 router = APIRouter()
 
@@ -109,8 +110,9 @@ async def overview(request: Request):
             summaries = cache.list_summaries()
 
     last_refresh = cache.last_refresh_at() if cache else None
+    from src.bot import templates as bot_templates
     last_refresh_human = (
-        last_refresh.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        last_refresh.astimezone(bot_templates.DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
         if last_refresh else None
     )
 
@@ -153,7 +155,10 @@ async def project_detail(request: Request, project_id: str):
         from datetime import datetime, timezone
         dwell = max(0, int((datetime.now(timezone.utc) - p.status_changed_at).total_seconds()))
     last = cache.last_refresh_at() if cache else None
-    last_human = last.strftime("%Y-%m-%d %H:%M:%S UTC") if last else None
+    last_human = (
+        last.astimezone(bot_templates.DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        if last else None
+    )
 
     return templates.TemplateResponse(
         request=request, name="project_detail.html",
@@ -190,7 +195,10 @@ async def mappings(request: Request):
         )
 
     last = cache.last_refresh_at() if cache else None
-    last_human = last.strftime("%Y-%m-%d %H:%M:%S UTC") if last else None
+    last_human = (
+        last.astimezone(bot_templates.DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        if last else None
+    )
     return templates.TemplateResponse(
         request=request, name="mappings.html",
         context={

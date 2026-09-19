@@ -11,14 +11,30 @@ render_broadcast() 产出 Telegram Markdown（PTB 客户端会再加 MarkdownV2 
 — 09-18 21:00 自动播报
 
 超过 per_status_thresholds 阈值时 head 行追加 ⚠。
+
+DISPLAY_TZ 在 main.py 启动时由 cfg.display_timezone 设置；不设就是 UTC。
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.models.project import Mapping, Project
 from src.models.status import StatusCode
+
+
+# 由 main.py 在启动时根据 cfg.display_timezone 设置
+DISPLAY_TZ: ZoneInfo | timezone = timezone.utc
+
+
+def _set_display_tz(tz_name: str) -> None:
+    """main.py 调用：按 cfg.display_timezone 设置全局显示时区。"""
+    global DISPLAY_TZ
+    try:
+        DISPLAY_TZ = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        DISPLAY_TZ = timezone.utc
 
 
 STATUS_EMOJI: dict[StatusCode, str] = {
@@ -88,11 +104,13 @@ def render_broadcast(
     head = f"📊 *`{project.project_id}` {name}*"
     if exceeded_threshold:
         head += " ⚠"
+    # 显示时区（用户在 cfg.display_timezone 配置，如 Asia/Shanghai）
+    local_now = now.astimezone(DISPLAY_TZ)
     lines = [
         head,
         _format_status_line(project),
         "",
-        f"— `{now.strftime('%m-%d %H:%M')}` 自动播报",
+        f"— `{local_now.strftime('%m-%d %H:%M')}` 自动播报",
     ]
     return "\n".join(lines)
 

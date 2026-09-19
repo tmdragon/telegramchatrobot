@@ -105,6 +105,10 @@ def main(argv: list[str] | None = None) -> int:
         per_status_thresholds=scheduler_cfg.per_status_thresholds,
         admin_broadcast_chats=scheduler_cfg.admin_broadcast_chats,
     ) if bot_service is not None else None
+
+    # 把 cfg.display_timezone 应用到 templates（播报时间戳按本地时区显示）
+    from src.bot import templates as bot_templates
+    bot_templates._set_display_tz(cfg.display_timezone)
     # 提前构造 refresher，事件驱动模式下 scheduler 需要它
     refresher = BackgroundRefresher(repo, mapping_repo, store, cfg, cache)
     scheduler = build_scheduler(broadcast_svc, scheduler_cfg, refresher=refresher) if bot_service is not None else None

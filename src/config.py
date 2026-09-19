@@ -26,6 +26,8 @@ class AppConfig:
     ui_port: int
     ui_bind: str
     spreadsheets: list[SpreadsheetConfig] = field(default_factory=list)
+    # 播报 / UI 显示用的时区（IANA 名，如 "Asia/Shanghai"；默认 UTC）
+    display_timezone: str = "UTC"
 
 
 def _read_yaml(path: Path) -> dict:
@@ -48,4 +50,5 @@ def load_config(secrets_path: Path, sheets_path: Path) -> AppConfig:
             SpreadsheetConfig(id=s["id"], name=s["name"], role=s["role"])
             for s in sheets.get("spreadsheets", [])
         ],
+        display_timezone=secrets.get("display_timezone", "UTC"),
     )
