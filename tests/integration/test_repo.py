@@ -18,7 +18,7 @@ def test_fetch_all_groups_rows_by_project_id():
         ["PRJ-001", "项目一", "制作中"],
         ["PRJ-002", "项目二", "验收中"],
     ])
-    fake_client.open.return_value.worksheet.return_value = fake_ws
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
 
     repo = SheetRepo(fake_client)
     ss = [SpreadsheetConfig(id="ss1", name="项目主表", role="master")]
@@ -48,8 +48,8 @@ def test_fetch_all_multiple_sheets_same_project_merged():
     ])
     fake_ws2.title = "财务子表"
 
-    # 两次 open 返回不同 worksheet
-    fake_client.open.side_effect = [
+    # 两次 open_by_key 返回不同 spreadsheet
+    fake_client.open_by_key.side_effect = [
         MagicMock(worksheet=MagicMock(return_value=fake_ws1)),
         MagicMock(worksheet=MagicMock(return_value=fake_ws2)),
     ]
@@ -76,7 +76,7 @@ def test_fetch_all_empty_project_id_rows_skipped():
         ["", "制作中"],          # 空项目编号行：跳过
         ["PRJ-001", "制作中"],
     ])
-    fake_client.open.return_value.worksheet.return_value = fake_ws
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
 
     repo = SheetRepo(fake_client)
     ss = [SpreadsheetConfig(id="ss1", name="项目主表", role="master")]

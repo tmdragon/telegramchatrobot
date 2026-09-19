@@ -1,7 +1,8 @@
 """SheetRepo：从 Google Sheets 读取并合并为 Project 列表。完整定义见 spec §2.3 读路径。
 
 设计：
-- 每个 spreadsheet 默认读第一个 worksheet（"主表"）
+- 用 ss.id 通过 open_by_key 打开 spreadsheet（id 是唯一标识，与文件名无关）
+- 用 ss.name 在 spreadsheet 内找同名 worksheet（默认 tab）
 - 每行用 HeaderDetector 识别 project_id / status / project_name 列
 - 同一 project_id 出现在多张表 → 合并到同一个 Project.sheets
 """
@@ -33,7 +34,7 @@ class SheetRepo:
         projects_by_id: dict[str, Project] = {}
 
         for ss in spreadsheets:
-            sh = self.client.open(ss.name)
+            sh = self.client.open_by_key(ss.id)
             ws = sh.worksheet(ss.name)  # 默认用同名 worksheet
             rows = ws.get_all_values()
             if not rows:

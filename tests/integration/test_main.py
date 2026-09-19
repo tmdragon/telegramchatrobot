@@ -38,7 +38,7 @@ def test_main_loads_config_fetches_and_prints(tmp_path: Path, capsys):
         ["项目编号", "状态"],
         ["PRJ-001", "制作中"],
     ]
-    fake_client.open.return_value.worksheet.return_value = fake_ws
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
 
     with patch("src.main.make_gspread_client", return_value=fake_client), \
          patch("src.main.uvicorn.run") as mock_run:
