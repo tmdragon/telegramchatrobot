@@ -73,9 +73,10 @@ class BackgroundRefresher:
                     if old_p is None:
                         # 新出现的项目 → 视为变化
                         changes.append(new_p)
-                    elif (old_p.status != new_p.status
-                          or old_p.status_changed_at != new_p.status_changed_at):
-                        # 状态码或 status_changed_at 变化 → 视为变化
+                    elif old_p.status != new_p.status:
+                        # 仅 status 码变化才算变化（status_changed_at 在每次
+                        # SheetRepo 重建 dict 时都会被重写为 fetched_at，不能
+                        # 拿来当 diff 信号）
                         changes.append(new_p)
             # 提交新快照
             self._previous = new_index

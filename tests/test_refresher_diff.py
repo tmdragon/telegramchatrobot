@@ -103,8 +103,10 @@ async def test_status_code_change_is_detected():
 
 
 @pytest.mark.asyncio
-async def test_status_changed_at_change_is_detected():
-    """status_changed_at 时间戳变化（同 code）也视为变化（说明流转了）。"""
+async def test_status_changed_at_change_alone_is_not_detected():
+    """status_changed_at 单独变化（同 code）不算变化 —— 因为 SheetRepo 每次刷新
+    重建 dict 时都会把 status_changed_at 重写为 fetched_at，会造成误判。
+    只比 status 码。"""
     sheet_repo = MagicMock()
     mapping_repo = MagicMock()
     store = MagicMock()
@@ -117,13 +119,12 @@ async def test_status_changed_at_change_is_detected():
     await _refresh(refresher, [_make_project("PRJ-001", status=StatusCode.MAKING,
                                               status_changed_at=old_time)])
 
-    # 第二次：同一 status，但时间戳变了（表示又流转了一次）
+    # 第二次：同一 status，但时间戳变了（模拟 SheetRepo 重建 dict 重写时间）
     new_time = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
     p_changed = _make_project("PRJ-001", status=StatusCode.MAKING,
                               status_changed_at=new_time)
     result = await _refresh(refresher, [p_changed])
-    assert len(result["changes"]) == 1
-    assert result["changes"][0].project_id == "PRJ-001"
+    assert result["changes"] == []
 
 
 @pytest.mark.asyncio
