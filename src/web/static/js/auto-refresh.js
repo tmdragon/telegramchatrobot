@@ -35,6 +35,30 @@ async function _tick() {
   }
 }
 
+async function _manualRefresh() {
+  // 手动刷新：先 POST /api/refresh（拉 sheet → 更新 cache → 触发状态变化播报）
+  // 再调 _tick() 拉页面数据（让 UI 显示最新）
+  bus.dispatchEvent(new CustomEvent("refresh:start"));
+  try {
+    const r = await fetch("/api/refresh", {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const result = await r.json();
+    if (result.broadcast_count) {
+      bus.dispatchEvent(new CustomEvent("refresh:done", {
+        detail: { broadcast_count: result.broadcast_count },
+      }));
+    }
+  } catch (e) {
+    errors.bump(`manual refresh failed: ${e.message}`);
+  }
+  // 然后拉 UI 页面数据
+  await _tick();
+}
+
 export function start({ intervalMs = 60_000 } = {}) {
   let timer = null;
 
@@ -49,6 +73,7 @@ export function start({ intervalMs = 60_000 } = {}) {
     if (e.key === "cgr.autoRefresh") _restart();
   });
   bus.addEventListener("auto-refresh:toggle", _restart);
+  bus.addEventListener("manual:refresh", _manualRefresh);
 
   _restart();
 }

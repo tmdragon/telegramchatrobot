@@ -63,9 +63,26 @@ async def post_refresh(request: Request, body: Optional[RefreshBody] = None):
     refresher = getattr(app.state, "refresher", None)
     if refresher is None:
         raise HTTPException(status_code=503, detail="refresher not initialized")
+    broadcast_svc = getattr(app.state, "broadcast_svc", None)
+
     result = await refresher.refresh_now(
         spreadsheet_names=(body.spreadsheet_names if body else None),
     )
+
+    # 手动刷新也算事件驱动：检测到状态变化 → 立即播报该变化的项目
+    # 与 _refresh_and_broadcast_wrapper 行为对齐（auto refresh 也会播）
+    changes = result.get("changes", []) or []
+    broadcast_count = 0
+    if broadcast_svc is not None:
+        for project in changes:
+            try:
+                await broadcast_svc.broadcast_project(project)
+                broadcast_count += 1
+            except Exception:  # noqa: BLE001
+                # 单项目失败不影响整体
+                pass
+
+    result["broadcast_count"] = broadcast_count
     return result
 
 
