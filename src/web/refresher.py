@@ -114,7 +114,7 @@ class BackgroundRefresher:
             now = datetime.now(timezone.utc)
             for ss in targets:
                 try:
-                    sh = await asyncio.to_thread(self.sheet_repo.client.open, ss.name)
+                    sh = await asyncio.to_thread(self.sheet_repo.client.open_by_key, ss.id)
                     ws = await asyncio.to_thread(sh.worksheet, ss.name)
                     rows = await asyncio.to_thread(ws.get_all_values)
                     await asyncio.to_thread(

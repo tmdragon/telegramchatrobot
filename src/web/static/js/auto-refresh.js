@@ -37,7 +37,7 @@ async function _tick() {
 
 async function _manualRefresh() {
   // 手动刷新：先 POST /api/refresh（拉 sheet → 更新 cache → 触发状态变化播报）
-  // 再调 _tick() 拉页面数据（让 UI 显示最新）
+  // 然后 reload 页面（overview 是 SSR，无 JS 重渲染模块，必须靠 reload）
   bus.dispatchEvent(new CustomEvent("refresh:start"));
   try {
     const r = await fetch("/api/refresh", {
@@ -52,11 +52,11 @@ async function _manualRefresh() {
         detail: { broadcast_count: result.broadcast_count },
       }));
     }
+    // reload 让 SSR 页面显示最新数据；refresh 已成功（含 broadcast）
+    window.location.reload();
   } catch (e) {
     errors.bump(`manual refresh failed: ${e.message}`);
   }
-  // 然后拉 UI 页面数据
-  await _tick();
 }
 
 export function start({ intervalMs = 60_000 } = {}) {
