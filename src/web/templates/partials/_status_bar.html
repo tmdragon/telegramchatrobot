@@ -1,9 +1,8 @@
-{# 顶部状态栏：上次刷新时间 / 手动刷新 / 自动刷新开关 / 错误计数 #}
+{# 顶部状态栏：上次刷新时间 / 手动刷新 / 自动刷新开关 / 错误计数
+   last_refresh_at 是 ISO8601 (UTC)，由 status-bar.js 在浏览器本地时区渲染 #}
 <header class="status-bar" id="status-bar">
   <span class="status-bar__refresh">
-    上次刷新: <time data-last-refresh="{{ last_refresh_at or '' }}">
-      {{ last_refresh_human or "—" }}
-    </time>
+    上次刷新: <time data-last-refresh="{{ last_refresh_at or '' }}">—</time>
   </span>
 
   <button type="button"

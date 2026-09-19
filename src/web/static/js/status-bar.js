@@ -2,8 +2,6 @@
 // 暴露 EventTarget 事件总线：refresh:start / refresh:done / refresh:error。
 // 其他模块（auto-refresh / inline-edit）emit 与 listen。
 
-import { formatRelative } from "./time.js";
-
 const bus = new EventTarget();
 const errors = {
   _count: 0,
@@ -33,10 +31,29 @@ function _renderErrorBadge() {
   if (txt) txt.textContent = String(errors._count);
 }
 
+function _formatLocal(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
 function _updateLastRefresh() {
   const t = document.querySelector("[data-last-refresh]");
   if (!t) return;
-  t.textContent = formatRelative(new Date().toISOString());
+  const iso = t.getAttribute("data-last-refresh");
+  // SSR 已把 ISO 写到 data-last-refresh；这里转成本地时区显示
+  // （fallback 用当前时间，auto-refresh 时维持 30s 内不变）
+  if (iso) {
+    t.textContent = _formatLocal(iso);
+    t.setAttribute("title", `服务器时间: ${_formatLocal(iso)} (${iso})`);
+  } else {
+    t.textContent = "—";
+  }
 }
 
 export function mount(rootSelector = "#status-bar") {
