@@ -4,43 +4,74 @@
 
 {% block content %}
 <main class="page page--overview">
-  <h1 class="page__title">项目管理</h1>
+  <h1 class="page__title">
+    <span>📦 项目管理</span>
+    <span style="font-size: 13px; color: var(--c-text-muted); font-weight: normal;">
+      共 <strong data-project-count>{{ summaries | length }}</strong> 个项目
+    </span>
+  </h1>
 
   {% include "partials/_error_banner.html" %}
 
   {% if summaries %}
-    <table class="overview-table">
-      <thead>
-        <tr>
-          <th>项目编号</th>
-          <th>项目名</th>
-          <th>当前状态</th>
-          <th>在当前状态停留</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in summaries %}
-          <tr class="overview-row" data-project-id="{{ s.project_id }}">
-            <td>
-              <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
-            </td>
-            <td>{{ s.project_name or "—" }}</td>
-            <td>
-              {% with code=s.status, raw=s.status.value if s.status else None %}
-                {% include "partials/_status_badge.html" %}
-              {% endwith %}
-            </td>
-            <td>{{ s.dwell_seconds | humanize_duration }}</td>
-            <td>
-              <a href="/project/{{ s.project_id }}" class="overview-row__view">查看</a>
-            </td>
+    <section class="overview-card">
+      <header class="overview-card__header">
+        <div class="overview-card__title">所有项目</div>
+        <div class="overview-card__hint">状态变更自动播报到对应群</div>
+      </header>
+      <table class="overview-table" id="overview-table">
+        <thead>
+          <tr>
+            <th style="width: 18%;">项目编号</th>
+            <th style="width: 28%;">项目名</th>
+            <th style="width: 18%;">当前状态</th>
+            <th style="width: 18%;">停留</th>
+            <th style="width: 18%; text-align: right;">操作</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for s in summaries %}
+            <tr class="overview-row"
+                data-project-id="{{ s.project_id }}"
+                data-status="{{ s.status.value if s.status else 'NONE' }}"
+                data-package="{{ s.package_name or '' }}"
+                data-name="{{ s.project_name or '' }}">
+              <td>
+                <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
+              </td>
+              <td>
+                {% if s.project_name %}
+                  <span class="overview-row__name">{{ s.project_name }}</span>
+                {% else %}
+                  <span class="overview-row__name--placeholder">（未命名）</span>
+                {% endif %}
+              </td>
+              <td>
+                {% with code=s.status, raw=s.status.value if s.status else None %}
+                  {% include "partials/_status_badge.html" %}
+                {% endwith %}
+              </td>
+              <td>
+                <span class="overview-row__dwell" data-dwell-seconds="{{ s.dwell_seconds }}">
+                  {{ s.dwell_seconds | humanize_duration }}
+                </span>
+              </td>
+              <td style="text-align: right;">
+                <a href="/project/{{ s.project_id }}" class="overview-row__view">查看 →</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
   {% else %}
-    <p class="empty-state">暂无项目</p>
+    <section class="overview-card">
+      <div class="empty-state">
+        <div class="empty-state__icon">📭</div>
+        <div>暂无项目数据</div>
+        <div style="font-size: 12px; margin-top: var(--s-2);">检查 Google Sheets 配置或点击"手动刷新"</div>
+      </div>
+    </section>
   {% endif %}
 </main>
 {% endblock %}

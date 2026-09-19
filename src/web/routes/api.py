@@ -48,6 +48,7 @@ async def get_projects(request: Request):
             {
                 "project_id": s.project_id,
                 "project_name": s.project_name,
+                "package_name": s.package_name,
                 "status": s.status.value if s.status else None,
                 "dwell_seconds": s.dwell_seconds,
             }

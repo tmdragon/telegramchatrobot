@@ -36,8 +36,8 @@ async function _tick() {
 }
 
 async function _manualRefresh() {
-  // 手动刷新：先 POST /api/refresh（拉 sheet → 更新 cache → 触发状态变化播报）
-  // 然后 reload 页面（overview 是 SSR，无 JS 重渲染模块，必须靠 reload）
+  // 手动刷新：POST /api/refresh 触发 sheet 拉取 + 状态变化播报
+  // overview-live.js 会自动 poll /api/projects 把最新数据 diff 到表格上
   bus.dispatchEvent(new CustomEvent("refresh:start"));
   try {
     const r = await fetch("/api/refresh", {
@@ -47,13 +47,14 @@ async function _manualRefresh() {
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const result = await r.json();
+    bus.dispatchEvent(new CustomEvent("refresh:done", {
+      detail: { broadcast_count: result.broadcast_count || 0 },
+    }));
     if (result.broadcast_count) {
-      bus.dispatchEvent(new CustomEvent("refresh:done", {
-        detail: { broadcast_count: result.broadcast_count },
-      }));
+      // 触发动态刷新一次（不等 poll）
+      const tickEvt = new CustomEvent("cgr:trigger-refresh");
+      document.dispatchEvent(tickEvt);
     }
-    // reload 让 SSR 页面显示最新数据；refresh 已成功（含 broadcast）
-    window.location.reload();
   } catch (e) {
     errors.bump(`manual refresh failed: ${e.message}`);
   }
