@@ -35,6 +35,7 @@ def test_status_emoji_table_covers_common_codes():
 
 
 def test_render_broadcast_basic_shape():
+    """极简模板：仅 head + 当前状态 + footer。"""
     p = _project()
     m = _mapping()
     now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
@@ -43,10 +44,16 @@ def test_render_broadcast_basic_shape():
     assert "PRJ-001" in text
     assert "项目一" in text
     assert "我方制作中" in text
-    assert "张三" in text
-    assert "项目主表" in text
-    # dwell 9 小时 = 9 小时（09:18 21:00 - 09:18 12:00）
-    assert "9 小时" in text
+    # 责任人、来源表不再出现在播报里
+    assert "张三" not in text
+    assert "项目主表" not in text
+    # 没有 dwell 提示
+    assert "已停留" not in text
+    assert "9 小时" not in text
+    # 没有最近流转行
+    assert "最近流转" not in text
+    # 没有责任人行
+    assert "责任人" not in text
     # footer
     assert "09-18 21:00" in text
 
@@ -61,29 +68,13 @@ def test_render_broadcast_includes_warning_on_threshold():
     assert "对方验收中" in text
 
 
-def test_render_broadcast_includes_recent_transition():
-    p = _project(
-        status=StatusCode.CLIENT_REVIEW,
-        status_history=[
-            (StatusCode.ORDERED, datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc)),
-            (StatusCode.MAKING, datetime(2026, 9, 16, 18, 0, tzinfo=timezone.utc)),
-            (StatusCode.CLIENT_REVIEW, datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)),
-        ],
-    )
-    m = _mapping()
-    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
-    text = render_broadcast(p, m, now, exceeded_threshold=False)
-    assert "我方制作中" in text  # 上一个状态
-    assert "对方验收中" in text  # 当前
-
-
-def test_render_broadcast_handles_missing_name_and_responsible():
+def test_render_broadcast_handles_missing_name():
     p = _project(project_name=None)
     m = _mapping()
     now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
     text = render_broadcast(p, m, now, exceeded_threshold=False)
     assert "PRJ-001" in text
-    assert "未命名" in text or "—" in text
+    assert "未命名" in text
 
 
 def test_render_dryrun_preview_has_dryrun_prefix():
@@ -94,24 +85,13 @@ def test_render_dryrun_preview_has_dryrun_prefix():
     assert "DRYRUN" in text.upper() or "试运行" in text or "预览" in text
 
 
-def test_render_broadcast_dates_are_backtick_wrapped():
-    """日期里的 '-' 是 MarkdownV2 保留字符；render_broadcast 必须用反引号包裹日期
-    否则 Telegram 解析时会抛 BadRequest ('character \"-\" is reserved')。"""
+def test_render_broadcast_footer_date_is_backtick_wrapped():
+    """日期里的 '-' 是 MarkdownV2 保留字符；footer 日期必须用反引号包裹。"""
     p = _project()
     m = _mapping()
     now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
     text = render_broadcast(p, m, now, exceeded_threshold=False)
-    # footer 日期必须被反引号包裹
     assert "`09-18 21:00`" in text
-    # 历史流转日期同理（如果 status_history 长度 >= 2）
-    p2 = _project(
-        status_history=[
-            (StatusCode.ORDERED, datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc)),
-            (StatusCode.MAKING, datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)),
-        ],
-    )
-    text2 = render_broadcast(p2, m, now, exceeded_threshold=False)
-    assert "`09-10 09:00`" in text2
 
 
 def test_render_broadcast_prefers_status_raw_text_over_canonical():
@@ -120,11 +100,9 @@ def test_render_broadcast_prefers_status_raw_text_over_canonical():
     m = _mapping()
     now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
     text = render_broadcast(p, m, now, exceeded_threshold=False)
-    # 当前状态行应该出现 sheet 原文本
     assert "▸ 当前状态" in text
     status_line = next(l for l in text.splitlines() if l.startswith("▸ 当前状态"))
     assert "制作中" in status_line
-    # 当前状态行不应是 canonical "我方制作中"（transition 行还可以有 canonical，不在此断言）
     assert "我方制作中" not in status_line
 
 
