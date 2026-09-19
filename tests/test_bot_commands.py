@@ -68,7 +68,7 @@ async def test_help_cmd_replies_with_command_list():
     assert "/status" in text
     assert "/projects" in text
     assert "/help" in text
-    assert "/force\\_broadcast" in text  # MarkdownV2 escapes _ as \_
+    assert "/force_broadcast" in text  # wrapped in backticks (no MarkdownV2 escaping needed)
     assert "/reload" in text
     assert "/dryrun" in text
 
@@ -194,3 +194,16 @@ async def test_register_handlers_registers_six():
     )
     # 6 CommandHandler + 1 监听 user_id 的 MessageHandler（hint）= 至少 6 次
     assert app.add_handler.call_count >= 6
+
+
+# ---------- /chatid ----------
+
+async def test_chatid_cmd_replies_with_chat_id():
+    from src.bot.commands import chatid_cmd
+    u = _make_update(user_id=42)
+    u.effective_chat.id = -1001234567890
+    c = _make_context()
+    await chatid_cmd(u, c)
+    u.message.reply_text.assert_awaited_once()
+    text = u.message.reply_text.await_args.args[0]
+    assert "-1001234567890" in text

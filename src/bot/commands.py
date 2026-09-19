@@ -28,12 +28,13 @@ if TYPE_CHECKING:
 
 HELP_TEXT = (
     "🤖 *checkGPRobot*\n\n"
-    "/status PRJ-XXX — 查看项目当前状态\n"
-    "/projects — 列出所有项目\n"
-    "/help — 帮助\n"
-    "/force\\_broadcast — 立即全员播报（管理员）\n"
-    "/reload — 重读所有配置（管理员）\n"
-    "/dryrun — 渲染文案预览，不发送（管理员）"
+    "`/status PRJ-XXX` — 查看项目当前状态\n"
+    "`/projects` — 列出所有项目\n"
+    "`/chatid` — 显示当前 chat 的 ID（管理员自助查群 ID）\n"
+    "`/help` — 帮助\n"
+    "`/force_broadcast` — 立即全员播报（管理员）\n"
+    "`/reload` — 重读所有配置（管理员）\n"
+    "`/dryrun` — 渲染文案预览，不发送（管理员）"
 )
 
 
@@ -69,7 +70,7 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     name_text = p.project_name or "（未命名）"
     await _reply(
         update,
-        f"📊 *{p.project_id} {name_text}*\n"
+        f"📊 *`{p.project_id}` {name_text}*\n"
         f"▸ 当前状态：`{status_text}`\n"
         f"▸ 停留时长：`{humanize_duration(dwell)}`",
     )
@@ -90,6 +91,16 @@ async def projects_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _reply(update, HELP_TEXT)
+
+
+async def chatid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """回复当前 chat 的 ID（私聊/群都通用），用于 admin 自助查群 chat_id。"""
+    chat = update.effective_chat
+    cid = chat.id if chat is not None else None
+    if cid is None:
+        await _reply(update, "❓ 无法获取 chat id")
+        return
+    await _reply(update, f"ℹ️ This chat's ID: `{cid}`")
 
 
 async def force_broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -167,6 +178,7 @@ def register_handlers(
 
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("projects", projects_cmd))
+    app.add_handler(CommandHandler("chatid", chatid_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("force_broadcast", force_broadcast_cmd))
     app.add_handler(CommandHandler("reload", reload_cmd))
