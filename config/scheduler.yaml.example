@@ -1,0 +1,11 @@
+# checkGPRobot 调度策略模板（实际配置复制为 scheduler.yaml）
+broadcast:
+  times:
+    - "09:00"
+    - "18:00"
+  weekdays_only: true   # 周六周日不播
+  skip_if_no_change: true  # 状态无变化时跳过（避免刷屏）
+  per_status_thresholds:
+    MAKING: 14          # 超过 14 天 → ⚠
+    CLIENT_REVIEW: 7
+    UNPAID: 30
