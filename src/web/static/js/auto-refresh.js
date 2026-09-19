@@ -37,7 +37,7 @@ async function _tick() {
 
 async function _manualRefresh() {
   // 手动刷新：POST /api/refresh 触发 sheet 拉取 + 状态变化播报
-  // overview-live.js 会自动 poll /api/projects 把最新数据 diff 到表格上
+  // 之后无论是否 broadcast 都立即拉一次 overview 数据，让表格立刻更新
   bus.dispatchEvent(new CustomEvent("refresh:start"));
   try {
     const r = await fetch("/api/refresh", {
@@ -50,11 +50,8 @@ async function _manualRefresh() {
     bus.dispatchEvent(new CustomEvent("refresh:done", {
       detail: { broadcast_count: result.broadcast_count || 0 },
     }));
-    if (result.broadcast_count) {
-      // 触发动态刷新一次（不等 poll）
-      const tickEvt = new CustomEvent("cgr:trigger-refresh");
-      document.dispatchEvent(tickEvt);
-    }
+    // 触发动态刷新（不等 poll），让用户立刻看到最新数据
+    document.dispatchEvent(new CustomEvent("cgr:trigger-refresh"));
   } catch (e) {
     errors.bump(`manual refresh failed: ${e.message}`);
   }
