@@ -37,8 +37,9 @@ async function _tick() {
 
 async function _manualRefresh() {
   // 手动刷新：POST /api/refresh 触发 sheet 拉取 + 状态变化播报
-  // 1 秒后 reload 页面（保证用户一定看到新数据；dynamic refresh 是补充）
+  // 成功 → 立即 reload（最可靠的反馈；避免 JS 缓存导致 dynamic refresh 失效）
   bus.dispatchEvent(new CustomEvent("refresh:start"));
+  let result;
   try {
     const r = await fetch("/api/refresh", {
       method: "POST",
@@ -46,18 +47,18 @@ async function _manualRefresh() {
       body: JSON.stringify({}),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const result = await r.json();
-    bus.dispatchEvent(new CustomEvent("refresh:done", {
-      detail: { broadcast_count: result.broadcast_count || 0 },
-    }));
-    // 触发 dynamic refresh（让用户立即看到变化，不等 reload）
-    document.dispatchEvent(new CustomEvent("cgr:trigger-refresh"));
+    result = await r.json();
   } catch (e) {
     errors.bump(`manual refresh failed: ${e.message}`);
     return;
   }
-  // reload 兜底（即使 dynamic refresh 因 JS 缓存等原因失效，1s 后 reload 也保证看到新数据）
-  setTimeout(() => window.location.reload(), 1000);
+  bus.dispatchEvent(new CustomEvent("refresh:done", {
+    detail: { broadcast_count: result.broadcast_count || 0 },
+  }));
+  // 立刻 reload 页面 —— 用户最直接、可靠的反馈
+  // （dynamic refresh 由 overview-live.js 处理，但因为浏览器可能缓存旧 JS，
+  //   强制 reload 才能保证看到新数据）
+  window.location.reload();
 }
 
 export function start({ intervalMs = 60_000 } = {}) {
