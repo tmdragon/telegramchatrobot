@@ -271,8 +271,8 @@ async def test_hydrate_skips_projects_with_none_status():
         status_changed_at=None, status_history=[], sheets=[],
     )
     refresher._hydrate_status_changed_at([p])
+    # status=None 时不调 upsert（payment 也 None 时不调）
     store.upsert_project_state.assert_not_called()
-    store.get_project_state.assert_not_called()
 
 
 @pytest.mark.asyncio

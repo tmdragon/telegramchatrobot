@@ -18,10 +18,12 @@ from src.models.project import Field, Project, SheetView
 from src.sheets.parser import (
     HeaderDetector,
     PACKAGE_NAME_CANDIDATES,
+    PAYMENT_CANDIDATES,
     PROJECT_ID_CANDIDATES,
     PROJECT_NAME_CANDIDATES,
     STATUS_CANDIDATES,
     parse_package_name,
+    parse_payment_status,
     parse_project_id,
     parse_status,
 )
@@ -47,6 +49,7 @@ class SheetRepo:
             status_col = detector.find_column(STATUS_CANDIDATES)
             name_col = detector.find_column(PROJECT_NAME_CANDIDATES)
             pkg_col = detector.find_column(PACKAGE_NAME_CANDIDATES)
+            pay_col = detector.find_column(PAYMENT_CANDIDATES)
 
             if pid_col is None:
                 continue  # 此表无项目编号列，跳过
@@ -71,6 +74,8 @@ class SheetRepo:
                         recognized = "project_name"
                     elif pkg_col is not None and col_idx == pkg_col:
                         recognized = "package_name"
+                    elif pay_col is not None and col_idx == pay_col:
+                        recognized = "payment_status"
                     fields.append(Field(
                         name=header,
                         value=value,
@@ -93,6 +98,10 @@ class SheetRepo:
                 status_raw = status_raw or None
                 name = (row[name_col - 1].strip() or None) if name_col and name_col <= len(row) else None
                 pkg_name = parse_package_name(row[pkg_col - 1]) if pkg_col and pkg_col <= len(row) else None
+                # 支付状态（独立列；找不到时为 None）
+                pay_raw = row[pay_col - 1].strip() if pay_col and pay_col <= len(row) else None
+                pay_raw = pay_raw or None
+                payment = parse_payment_status(pay_raw)
 
                 if pid not in projects_by_id:
                     projects_by_id[pid] = Project(
@@ -102,6 +111,9 @@ class SheetRepo:
                         status=status,
                         status_raw=status_raw,
                         status_changed_at=fetched_at,  # 首次见到该状态的时间
+                        payment_status=payment,
+                        payment_raw=pay_raw,
+                        payment_changed_at=fetched_at if payment else None,
                         sheets=[sheet_view],
                     )
                 else:
@@ -110,6 +122,14 @@ class SheetRepo:
                         p.project_name = name
                     if pkg_name and not p.package_name:
                         p.package_name = pkg_name
+                    # 支付状态首次见到时写入；后续 sheet 可更新
+                    if payment is not None:
+                        if p.payment_status != payment:
+                            if p.payment_status is not None:
+                                p.payment_changed_at = fetched_at
+                            p.payment_status = payment
+                    if pay_raw and pay_raw != p.payment_raw:
+                        p.payment_raw = pay_raw
                     if status:
                         if p.status != status:
                             # 状态变了，记录历史

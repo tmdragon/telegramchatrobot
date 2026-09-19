@@ -20,11 +20,6 @@ def test_remaking_goes_to_making():
     assert not is_legal(StatusCode.REMAKING, StatusCode.CLIENT_REVIEW)
 
 
-def test_paid_unpaid_bidirectional():
-    assert is_legal(StatusCode.PAID, StatusCode.UNPAID)
-    assert is_legal(StatusCode.UNPAID, StatusCode.PAID)
-
-
 def test_legal_next_states():
     assert legal_next_states(StatusCode.ORDERED) == {StatusCode.MAKING}
     assert StatusCode.SECOND_REVIEW not in legal_next_states(StatusCode.SECOND_REVIEW)
@@ -34,7 +29,7 @@ def test_legal_next_states():
 def test_off_shelf_reachable_from_published():
     assert is_legal(StatusCode.PUBLISHED, StatusCode.OFF_SHELF)
     assert not is_legal(StatusCode.MAKING, StatusCode.OFF_SHELF)
-    assert not is_legal(StatusCode.PAID, StatusCode.OFF_SHELF)
+    assert not is_legal(StatusCode.SECOND_REVIEW, StatusCode.OFF_SHELF)
 
 
 def test_off_shelf_is_terminal():
@@ -45,8 +40,12 @@ def test_off_shelf_is_terminal():
         )
 
 
-def test_published_has_off_shelf_as_next():
-    assert StatusCode.OFF_SHELF in legal_next_states(StatusCode.PUBLISHED)
-    assert {StatusCode.PAID, StatusCode.UNPAID, StatusCode.OFF_SHELF} == legal_next_states(
-        StatusCode.PUBLISHED
-    )
+def test_published_has_only_off_shelf_as_next():
+    """PUBLISHED 现在只能转 OFF_SHELF（支付已拆出为独立字段）。"""
+    assert legal_next_states(StatusCode.PUBLISHED) == {StatusCode.OFF_SHELF}
+
+
+def test_status_code_excludes_payment():
+    """PAID/UNPAID 已从 StatusCode 拆出到 PaymentStatus，不应再存在。"""
+    assert not hasattr(StatusCode, "PAID")
+    assert not hasattr(StatusCode, "UNPAID")

@@ -23,6 +23,7 @@ function _rowSnapshot(tr) {
     status: tr.dataset.status || "",
     name: tr.dataset.name || "",
     package: tr.dataset.package || "",
+    payment: tr.dataset.payment || "",
     dwell_seconds: Number(tr.querySelector("[data-dwell-seconds]")?.dataset.dwellSeconds || 0),
     el: tr,
   };
@@ -63,7 +64,7 @@ function _badgeHtml(status, rawName) {
 }
 
 function _diffRow(tr, fresh) {
-  // fresh = {project_id, project_name, status, package_name, dwell_seconds}
+  // fresh = {project_id, project_name, status, package_name, payment_status, dwell_seconds}
   let changed = false;
   if ((tr.dataset.status || "") !== (fresh.status || "")) {
     tr.dataset.status = fresh.status || "NONE";
@@ -83,6 +84,10 @@ function _diffRow(tr, fresh) {
   }
   if ((tr.dataset.package || "") !== (fresh.package_name || "")) {
     tr.dataset.package = fresh.package_name || "";
+    changed = true;
+  }
+  if ((tr.dataset.payment || "") !== (fresh.payment_status || "")) {
+    tr.dataset.payment = fresh.payment_status || "NONE";
     changed = true;
   }
   const dwellEl = tr.querySelector("[data-dwell-seconds]");
@@ -137,6 +142,7 @@ function _applyDiff(freshList) {
       existing.status = p.status || "";
       existing.name = p.project_name || "";
       existing.package = p.package_name || "";
+      existing.payment = p.payment_status || "";
       existing.dwell_seconds = p.dwell_seconds || 0;
     } else {
       const tr = _createRow(p);
@@ -176,6 +182,7 @@ async function _tick() {
       project_name: p.project_name,
       status: p.status,
       package_name: p.package_name,
+      payment_status: p.payment_status,
       dwell_seconds: p.dwell_seconds,
     }));
     _applyDiff(list);

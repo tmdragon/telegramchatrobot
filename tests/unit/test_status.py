@@ -1,8 +1,9 @@
 from src.models.status import StatusCode, normalize, ALIASES
 
 
-def test_aliases_has_15_entries():
-    assert len(ALIASES) == 15
+def test_aliases_has_13_entries():
+    """PAID/UNPAID 已迁出到 PaymentStatus，StatusCode 别名表只剩 13 条。"""
+    assert len(ALIASES) == 13
 
 
 def test_off_shelf_aliases():

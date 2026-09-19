@@ -50,8 +50,6 @@ STATUS_EMOJI: dict[StatusCode, str] = {
     StatusCode.SECOND_REVIEW: "🟡",
     StatusCode.REMAKING: "🟠",
     StatusCode.PUBLISHED: "🟢",
-    StatusCode.PAID: "🟢",
-    StatusCode.UNPAID: "🔴",
     StatusCode.OFF_SHELF: "⚫",
 }
 
@@ -68,8 +66,6 @@ STATUS_DISPLAY_CN: dict[StatusCode, str] = {
     StatusCode.SECOND_REVIEW: "复审中",
     StatusCode.REMAKING: "我方重做中",
     StatusCode.PUBLISHED: "已发布",
-    StatusCode.PAID: "对方已回款",
-    StatusCode.UNPAID: "对方未回款",
     StatusCode.OFF_SHELF: "已下架",
 }
 

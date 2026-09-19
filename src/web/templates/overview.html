@@ -86,16 +86,6 @@
             <span class="status-badge__dot"></span>
             <span class="status-chip__name">已发布</span>
           </label>
-          <label class="status-chip status-chip--paid">
-            <input type="checkbox" value="PAID" checked>
-            <span class="status-badge__dot"></span>
-            <span class="status-chip__name">对方已回款</span>
-          </label>
-          <label class="status-chip status-chip--unpaid">
-            <input type="checkbox" value="UNPAID" checked>
-            <span class="status-badge__dot"></span>
-            <span class="status-chip__name">对方未回款</span>
-          </label>
           <label class="status-chip status-chip--off-shelf">
             <input type="checkbox" value="OFF_SHELF" checked>
             <span class="status-badge__dot"></span>
@@ -105,6 +95,24 @@
             <input type="checkbox" value="NONE" checked>
             <span class="status-badge__dot"></span>
             <span class="status-chip__name">未知</span>
+          </label>
+        </div>
+        <div class="overview-status-filter overview-payment-filter" id="filter-payment">
+          <span class="overview-payment-filter__label">回款</span>
+          <label class="status-chip status-chip--paid">
+            <input type="checkbox" value="PAID" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">已回款</span>
+          </label>
+          <label class="status-chip status-chip--unpaid">
+            <input type="checkbox" value="UNPAID" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">未回款</span>
+          </label>
+          <label class="status-chip status-chip--no-payment">
+            <input type="checkbox" value="NONE" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">无记录</span>
           </label>
         </div>
         <span class="overview-filters__count" id="filter-count"></span>
@@ -125,7 +133,8 @@
                 data-project-id="{{ s.project_id }}"
                 data-status="{{ s.status.value if s.status else 'NONE' }}"
                 data-package="{{ s.package_name or '' }}"
-                data-name="{{ s.project_name or '' }}">
+                data-name="{{ s.project_name or '' }}"
+                data-payment="{{ s.payment_status.value if s.payment_status else 'NONE' }}">
               <td>
                 <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
               </td>
@@ -168,20 +177,28 @@
   // 项目编号 / 状态筛选：客户端实时过滤（无服务器往返）
   const idInput = document.getElementById("filter-id");
   const statusFilter = document.getElementById("filter-status");
+  const paymentFilter = document.getElementById("filter-payment");
   const counter = document.getElementById("filter-count");
   function applyFilters() {
     const q = (idInput?.value || "").trim().toLowerCase();
-    // 收集所有勾选的状态码
     const checkedStatuses = new Set();
     statusFilter?.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => {
       checkedStatuses.add(cb.value);
+    });
+    const checkedPayments = new Set();
+    paymentFilter?.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => {
+      checkedPayments.add(cb.value);
     });
     let shown = 0, total = 0;
     document.querySelectorAll("#overview-table .overview-row").forEach((tr) => {
       total++;
       const id = (tr.dataset.projectId || "").toLowerCase();
       const rowSt = tr.dataset.status || "";
-      const match = (!q || id.includes(q)) && checkedStatuses.has(rowSt);
+      const rowPay = tr.dataset.payment || "";
+      const match =
+        (!q || id.includes(q)) &&
+        checkedStatuses.has(rowSt) &&
+        checkedPayments.has(rowPay);
       tr.style.display = match ? "" : "none";
       if (match) shown++;
     });
@@ -189,6 +206,9 @@
   }
   if (idInput) idInput.addEventListener("input", applyFilters);
   statusFilter?.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", applyFilters);
+  });
+  paymentFilter?.querySelectorAll("input[type=checkbox]").forEach((cb) => {
     cb.addEventListener("change", applyFilters);
   });
   applyFilters();

@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from src.models.status import StatusCode
+
+if TYPE_CHECKING:
+    from src.models.payment import PaymentStatus
 
 
 @dataclass
@@ -36,6 +39,10 @@ class Project:
     status: Optional[StatusCode] = None
     status_raw: Optional[str] = None  # sheet 状态列的原文本（normalize 之前的字符串）
     status_changed_at: Optional[datetime] = None
+    # 支付状态（独立字段，与生产流程解耦）
+    payment_status: Optional["PaymentStatus"] = None
+    payment_raw: Optional[str] = None  # sheet "回款/支付" 列原文
+    payment_changed_at: Optional[datetime] = None
     status_history: list[tuple[StatusCode, datetime]] = field(default_factory=list)
     sheets: list[SheetView] = field(default_factory=list)
 

@@ -14,6 +14,8 @@ PROJECT_ID_CANDIDATES = ["项目编号", "编号", "ID", "Project ID", "项目 I
 STATUS_CANDIDATES = ["状态", "当前状态", "项目状态", "Status", "status"]
 PROJECT_NAME_CANDIDATES = ["项目名", "项目名称", "Name", "name"]
 PACKAGE_NAME_CANDIDATES = ["包名", "Package", "package", "Package Name", "package_name"]
+# 支付状态列（独立于"状态"列；通常表里叫"回款"或"支付"）
+PAYMENT_CANDIDATES = ["回款", "支付", "付款", "Payment", "payment", "Paid", "PAY"]
 
 
 class HeaderDetector:
@@ -50,3 +52,9 @@ def parse_package_name(value: Optional[str]) -> Optional[str]:
         return None
     s = value.strip()
     return s or None
+
+
+def parse_payment_status(value: Optional[str]):
+    """支付状态解析：委托给 payment.normalize_payment。"""
+    from src.models.payment import normalize_payment
+    return normalize_payment(value)

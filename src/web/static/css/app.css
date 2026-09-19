@@ -297,6 +297,27 @@ a:hover { text-decoration: underline; }
   text-decoration: line-through;
   color: var(--c-text-muted);
 }
+
+/* 支付状态筛选区（与状态筛选区分开） */
+.overview-payment-filter {
+  border-left: 1px solid var(--c-border-soft);
+  padding-left: var(--s-3);
+  margin-left: var(--s-1);
+  position: relative;
+}
+.overview-payment-filter__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+  margin-right: var(--s-1);
+}
+
+/* 支付 chip 颜色（PAID=绿，UNPAID=红，NONE=灰） */
+.status-chip--paid { background: #dcfce7; color: #15803d; }
+.status-chip--unpaid { background: #fee2e2; color: #b91c1c; }
+.status-chip--no-payment { background: transparent; color: var(--c-text-muted); border: 1px dashed var(--c-border); }
 .status-chip__dot {
   width: 7px;
   height: 7px;

@@ -30,7 +30,7 @@ def _mapping(**kw):
 
 def test_status_emoji_table_covers_common_codes():
     for c in [StatusCode.MAKING, StatusCode.CLIENT_REVIEW, StatusCode.PUBLISHED,
-              StatusCode.PAID, StatusCode.FIRST_REVIEW_REJECTED, StatusCode.UNPAID]:
+              StatusCode.OFF_SHELF, StatusCode.FIRST_REVIEW_REJECTED]:
         assert c in STATUS_EMOJI
 
 

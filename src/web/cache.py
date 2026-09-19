@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from src.models.project import Project, SheetView
 from src.models.status import StatusCode
+
+if TYPE_CHECKING:
+    from src.models.payment import PaymentStatus
 
 
 # spec §5.3：唯一不可编辑字段 = project_id（在子表中）；status 与 project_name 可改
@@ -32,6 +35,8 @@ class ProjectSummary:
     locked_field_names: list[str]
     status_raw: Optional[str] = None  # sheet 状态列原文本
     package_name: Optional[str] = None  # sheet 包名/参数 列原文
+    payment_status: Optional["PaymentStatus"] = None  # 独立支付状态
+    payment_raw: Optional[str] = None  # sheet 回款/支付 列原文
 
 
 class ProjectCache:
@@ -117,5 +122,7 @@ class ProjectCache:
                 editable_fields=editable,
                 locked_field_names=locked,
                 package_name=p.package_name,
+                payment_status=p.payment_status,
+                payment_raw=p.payment_raw,
             ))
         return out
