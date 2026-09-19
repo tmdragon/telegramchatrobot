@@ -364,3 +364,59 @@ async def delete_mapping(request: Request, project_id: str):
         "enabled": False,
         "deleted_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.post("/mappings/{project_id}/test-send")
+async def post_test_send(request: Request, project_id: str):
+    """立即渲染文案并发送给该项目的映射 chat（用于 UI "测试发送"按钮）。
+
+    503 bot_service 未配置；404 mapping 不存在 / project 不在 cache；
+    502 Telegram API 失败；200 成功。
+    """
+    app = request.app
+    bot_service = app.state.bot_service
+    if bot_service is None:
+        raise HTTPException(status_code=503, detail="Telegram bot not configured")
+
+    # 解析 mapping（同步 gspread → to_thread）
+    mapping_repo = app.state.mapping_repo
+    try:
+        mappings = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"mapping load failed: {e}")
+    mapping = next((m for m in mappings if m.project_id == project_id), None)
+    if mapping is None:
+        raise HTTPException(status_code=404, detail=f"mapping for {project_id} not found")
+
+    # 读 project
+    cache = app.state.cache
+    project = cache.get(project_id) if cache else None
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"project {project_id} not in cache")
+
+    # 读 chat_id override
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    chat_id = body.get("chat_id") or mapping.chat_id
+    if not chat_id:
+        raise HTTPException(status_code=400, detail="chat_id not specified")
+
+    from src.bot.templates import render_broadcast
+
+    now = datetime.now(timezone.utc)
+    text = render_broadcast(project, mapping, now, exceeded_threshold=False)
+
+    try:
+        await bot_service.send_message(chat_id, text)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"telegram send failed: {e}")
+
+    return {
+        "ok": True,
+        "chat_id": chat_id,
+        "message_preview": text,
+    }
