@@ -1,6 +1,6 @@
 spreadsheets:
-  - id: "REPLACE_WITH_SPREADSHEET_ID"
-    name: "项目主表"
+  - id: "1CVmpO5G9ucWmoad3YnrmnydueLOqdE0abDvi4w1hTt4"
+    name: "工作表1"
     role: "master"
   - id: "REPLACE_WITH_ANOTHER_SPREADSHEET_ID"
     name: "财务子表"
