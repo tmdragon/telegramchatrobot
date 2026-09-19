@@ -77,25 +77,52 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     args = context.args or []
     cache: ProjectCache = context.bot_data["cache"]
     if not args:
-        await _reply(update, "用法: `/status PRJ-XXX`")
+        await _reply(
+            update,
+            "用法:\n"
+            "`/status PRJ-XXX` — 按项目编号查\n"
+            "`/status <包名或项目名>` — 按包名/项目名模糊查",
+        )
         return
-    pid = args[0]
+    query = args[0].strip()
 
-    # 客户群只能查本群映射的项目
     chat = update.effective_chat
     chat_id_str = str(chat.id) if chat else ""
     admin_id = context.bot_data.get("admin_chat_id", 0)
     admin_broadcast_chats = context.bot_data.get("admin_broadcast_chats") or []
-    if not _is_privileged_chat(chat_id_str, admin_id, admin_broadcast_chats):
-        mappings = await _load_chat_mappings(context, chat_id_str)
-        if not any(m.project_id == pid for m in mappings):
-            await _reply(update, f"🔒 项目 `{pid}` 不在本群映射中。")
+    privileged = _is_privileged_chat(chat_id_str, admin_id, admin_broadcast_chats)
+
+    # 1) 精确按 project_id
+    p = cache.get(query)
+    # 2) 否则按包名 / 项目名 模糊匹配
+    if p is None:
+        q_lower = query.lower()
+        candidates = []
+        for proj in cache.list_projects():
+            pkg = (proj.package_name or "").lower()
+            name = (proj.project_name or "").lower()
+            if q_lower in pkg or q_lower in name:
+                candidates.append(proj)
+        if len(candidates) == 1:
+            p = candidates[0]
+        elif len(candidates) > 1:
+            lines = [f"🔍 多个匹配 `{query}`，请用编号："]
+            for c in candidates[:10]:
+                lines.append(f"  • `{c.project_id}` {c.project_name or '（未命名）'} 包名 `{c.package_name or '—'}`")
+            await _reply(update, "\n".join(lines))
+            return
+        else:
+            # 没匹配
+            await _reply(update, f"❓ 未找到 `{query}`（按编号、包名、项目名都查过）")
             return
 
-    p = cache.get(pid)
-    if p is None:
-        await _reply(update, f"❓ 未找到项目 `{pid}`")
-        return
+    # 客户群：校验映射
+    if not privileged:
+        mappings = await _load_chat_mappings(context, chat_id_str)
+        if not any(m.project_id == p.project_id for m in mappings):
+            await _reply(update, f"🔒 项目 `{p.project_id}` 不在本群映射中。")
+            return
+
     from src.bot.templates import status_display_text
     from src.web.filters import humanize_duration
 
@@ -105,9 +132,11 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         dwell = max(0, int((datetime.now(timezone.utc) - p.status_changed_at).total_seconds()))
     status_text = status_display_text(p) or "未知"
     name_text = p.project_name or "（未命名）"
+    pkg_text = p.package_name or "—"
     await _reply(
         update,
         f"📊 *`{p.project_id}` {name_text}*\n"
+        f"▸ 包名：`{pkg_text}`\n"
         f"▸ 当前状态：`{status_text}`\n"
         f"▸ 停留时长：`{humanize_duration(dwell)}`",
     )

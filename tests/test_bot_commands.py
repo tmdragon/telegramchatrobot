@@ -79,6 +79,7 @@ async def test_status_cmd_with_known_project():
     cache = ProjectCache()
     p = Project(
         project_id="PRJ-001", project_name="项目一",
+        package_name="com.example.game1",
         status=StatusCode.MAKING,
         status_changed_at=datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc),
         sheets=[],
@@ -94,6 +95,67 @@ async def test_status_cmd_with_known_project():
     text = u.message.reply_text.await_args.args[0]
     assert "PRJ-001" in text
     assert "MAKING" in text or "我方制作中" in text
+    assert "com.example.game1" in text
+
+
+async def test_status_cmd_search_by_package_name():
+    cache = ProjectCache()
+    cache.replace([
+        Project(project_id="PRJ-001", project_name="项目一",
+                package_name="com.example.game1",
+                status=StatusCode.MAKING, status_changed_at=None, sheets=[]),
+        Project(project_id="PRJ-002", project_name="项目二",
+                package_name="com.other.pkg",
+                status=StatusCode.PUBLISHED, status_changed_at=None, sheets=[]),
+    ])
+    u = _make_update(user_id=ADMIN_ID, chat_id=ADMIN_ID, args=["com.example.game1"])
+    c = _make_context(args=["com.example.game1"])
+    c.bot_data = {"cache": cache, "admin_chat_id": ADMIN_ID,
+                  "admin_broadcast_chats": []}
+    await status_cmd(u, c)
+    text = u.message.reply_text.await_args.args[0]
+    assert "PRJ-001" in text
+    assert "com.example.game1" in text
+
+
+async def test_status_cmd_search_by_project_name():
+    cache = ProjectCache()
+    cache.replace([
+        Project(project_id="PRJ-001", project_name="Tower up up",
+                package_name="com.tower.game",
+                status=StatusCode.PUBLISHED, status_changed_at=None, sheets=[]),
+        Project(project_id="PRJ-002", project_name="Other Game",
+                status=StatusCode.MAKING, status_changed_at=None, sheets=[]),
+    ])
+    u = _make_update(user_id=ADMIN_ID, chat_id=ADMIN_ID, args=["Tower"])
+    c = _make_context(args=["Tower"])
+    c.bot_data = {"cache": cache, "admin_chat_id": ADMIN_ID,
+                  "admin_broadcast_chats": []}
+    await status_cmd(u, c)
+    text = u.message.reply_text.await_args.args[0]
+    assert "PRJ-001" in text
+    assert "Tower up up" in text
+
+
+async def test_status_cmd_multiple_matches_returns_disambiguation():
+    cache = ProjectCache()
+    cache.replace([
+        Project(project_id="PRJ-001", project_name="Tower up",
+                package_name="com.tower.game1", status=StatusCode.PUBLISHED,
+                status_changed_at=None, sheets=[]),
+        Project(project_id="PRJ-002", project_name="Tower down",
+                package_name="com.tower.game2", status=StatusCode.MAKING,
+                status_changed_at=None, sheets=[]),
+    ])
+    u = _make_update(user_id=ADMIN_ID, chat_id=ADMIN_ID, args=["tower"])
+    c = _make_context(args=["tower"])
+    c.bot_data = {"cache": cache, "admin_chat_id": ADMIN_ID,
+                  "admin_broadcast_chats": []}
+    await status_cmd(u, c)
+    text = u.message.reply_text.await_args.args[0]
+    assert "PRJ-001" in text
+    assert "PRJ-002" in text
+    assert "多个匹配" in text or "tower" in text.lower()
 
 
 async def test_status_cmd_with_unknown_project():

@@ -35,7 +35,7 @@ def test_status_emoji_table_covers_common_codes():
 
 
 def test_render_broadcast_basic_shape():
-    """极简模板：仅 head + 当前状态 + footer。"""
+    """极简模板：仅 head + 当前状态 + 包名 + footer。"""
     p = _project()
     m = _mapping()
     now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
@@ -44,6 +44,9 @@ def test_render_broadcast_basic_shape():
     assert "PRJ-001" in text
     assert "项目一" in text
     assert "我方制作中" in text
+    # 包名：默认 None → 显示 "—"
+    assert "—`" in text  # 占位
+    assert "包名" in text
     # 责任人、来源表不再出现在播报里
     assert "张三" not in text
     assert "项目主表" not in text
@@ -56,6 +59,14 @@ def test_render_broadcast_basic_shape():
     assert "责任人" not in text
     # footer
     assert "09-18 21:00" in text
+
+
+def test_render_broadcast_includes_package_name():
+    p = _project(package_name="com.example.game")
+    m = _mapping()
+    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
+    text = render_broadcast(p, m, now, exceeded_threshold=False)
+    assert "com.example.game" in text
 
 
 def test_render_broadcast_includes_warning_on_threshold():

@@ -97,6 +97,7 @@ def render_broadcast(
     source_sheet_name: Optional[str] = None,
 ) -> str:
     name = project.project_name or "（未命名）"
+    pkg = project.package_name or "—"
     head = f"📊 *`{project.project_id}` {name}*"
     if exceeded_threshold:
         head += " ⚠"
@@ -105,6 +106,7 @@ def render_broadcast(
     lines = [
         head,
         _format_status_line(project),
+        f"▸ 包名：`{pkg}`",
         "",
         f"— `{local_now.strftime('%m-%d %H:%M')}` 自动播报",
     ]
