@@ -165,19 +165,27 @@ class Store:
 
     def latest_successful_broadcast(
         self, project_id: str, chat_id: str
-    ) -> Optional[tuple[str, str]]:
-        """返回 (status_code, message_text)。Phase 4 用于 skip_if_no_change 判定。"""
+    ) -> Optional[tuple[str, str, str]]:
+        """返回 (status_code, status_changed_at_iso, message_text)。
+
+        Phase 3 BroadcastSvc 的 skip_if_no_change 判定需要 status_changed_at；
+        通过 JOIN status_history 取最近一次匹配 status_code 的 detected_at。
+        若 status_history 中无记录（理论上不会发生），detected_at 为空字符串。
+        """
         with self._conn() as conn:
             row = conn.execute(
-                """SELECT status_code, message_text
-                   FROM broadcast_log
-                   WHERE project_id = ? AND chat_id = ? AND success = 1
-                   ORDER BY sent_at DESC LIMIT 1""",
+                """SELECT bl.status_code, bl.message_text, sh.detected_at
+                   FROM broadcast_log bl
+                   LEFT JOIN status_history sh
+                     ON sh.project_id = bl.project_id
+                    AND sh.status_code = bl.status_code
+                   WHERE bl.project_id = ? AND bl.chat_id = ? AND bl.success = 1
+                   ORDER BY bl.sent_at DESC LIMIT 1""",
                 (project_id, chat_id),
             ).fetchone()
         if row is None:
             return None
-        return (row["status_code"], row["message_text"])
+        return (row["status_code"], row["detected_at"] or "", row["message_text"])
 
     def record_status(self, project_id: str, status_code: str, detected_at: datetime) -> None:
         with self._conn() as conn:
