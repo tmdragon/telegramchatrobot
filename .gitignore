@@ -28,6 +28,10 @@ env/
 # Spyder
 .spyproject/config/encoding.ini
 .spyproject/config/codestyle.ini
+config/encoding.ini
+config/codestyle.ini
+config/vcs.ini
+config/defaults/
 
 # IDE / OS
 .vscode/
