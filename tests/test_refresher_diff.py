@@ -174,3 +174,127 @@ async def test_multiple_changes_in_one_refresh():
     ])
     changed_ids = sorted(p.project_id for p in result["changes"])
     assert changed_ids == ["PRJ-001", "PRJ-003"]
+
+
+# ---------- status_changed_at 持久化 ----------
+
+@pytest.mark.asyncio
+async def test_hydrate_first_seen_uses_fetched_at_and_persists():
+    """首次见到：写入 project_state，时间为 fetch 给的时间。"""
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    store = MagicMock()  # 不预设
+    cfg = MagicMock()
+    cfg.spreadsheets = [MagicMock(id="ss1", name="项目主表")]
+    cache = ProjectCache()
+    refresher = _make_refresher(sheet_repo, mapping_repo, store, cfg, cache)
+
+    initial = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    p = _make_project("PRJ-001", status=StatusCode.MAKING, status_changed_at=initial)
+    refresher._hydrate_status_changed_at([p])
+
+    # project_state 应被写入
+    store.upsert_project_state.assert_called_once_with(
+        "PRJ-001", StatusCode.MAKING.value, initial
+    )
+    # 首次见到 → 时间保持不变
+    assert p.status_changed_at == initial
+
+
+@pytest.mark.asyncio
+async def test_hydrate_unchanged_status_uses_stored_time():
+    """状态码未变：project 的 status_changed_at 被库里的旧时间覆盖。"""
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    store = MagicMock()
+    cfg = MagicMock()
+    cfg.spreadsheets = [MagicMock(id="ss1", name="项目主表")]
+    cache = ProjectCache()
+    refresher = _make_refresher(sheet_repo, mapping_repo, store, cfg, cache)
+
+    stored_time = datetime(2026, 9, 18, 9, 0, tzinfo=timezone.utc)
+    store.get_project_state = MagicMock(return_value=(
+        StatusCode.MAKING.value, stored_time
+    ))
+
+    fetched_at = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    p = _make_project("PRJ-001", status=StatusCode.MAKING, status_changed_at=fetched_at)
+    refresher._hydrate_status_changed_at([p])
+
+    # status_changed_at 应该是 stored_time，而不是 fetched_at
+    assert p.status_changed_at == stored_time
+    # 不应该再调 upsert（因为状态码没变）
+    store.upsert_project_state.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_hydrate_status_changed_uses_new_time_and_updates():
+    """状态码变化：用新时间，并 upsert project_state。"""
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    store = MagicMock()
+    cfg = MagicMock()
+    cfg.spreadsheets = [MagicMock(id="ss1", name="项目主表")]
+    cache = ProjectCache()
+    refresher = _make_refresher(sheet_repo, mapping_repo, store, cfg, cache)
+
+    old_time = datetime(2026, 9, 18, 9, 0, tzinfo=timezone.utc)
+    store.get_project_state = MagicMock(return_value=(
+        StatusCode.MAKING.value, old_time  # 之前是 MAKING
+    ))
+
+    new_time = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    p = _make_project("PRJ-001", status=StatusCode.CLIENT_REVIEW,
+                      status_changed_at=new_time)  # 现在是 CLIENT_REVIEW
+    refresher._hydrate_status_changed_at([p])
+
+    # 时间应该是新时间
+    assert p.status_changed_at == new_time
+    # upsert 被调，记录新状态
+    store.upsert_project_state.assert_called_once_with(
+        "PRJ-001", StatusCode.CLIENT_REVIEW.value, new_time
+    )
+
+
+@pytest.mark.asyncio
+async def test_hydrate_skips_projects_with_none_status():
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    store = MagicMock()
+    cfg = MagicMock()
+    cfg.spreadsheets = [MagicMock(id="ss1", name="项目主表")]
+    cache = ProjectCache()
+    refresher = _make_refresher(sheet_repo, mapping_repo, store, cfg, cache)
+
+    p = Project(
+        project_id="PRJ-001", project_name=None, status=None,
+        status_changed_at=None, status_history=[], sheets=[],
+    )
+    refresher._hydrate_status_changed_at([p])
+    store.upsert_project_state.assert_not_called()
+    store.get_project_state.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refresh_now_uses_hydrated_status_changed_at_in_changes():
+    """refresh_now 返回的 changes 中的 Project 应该用持久化的 status_changed_at。"""
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    store = MagicMock()
+    cfg = MagicMock()
+    cfg.spreadsheets = [MagicMock(id="ss1", name="项目主表")]
+    cache = ProjectCache()
+    refresher = _make_refresher(sheet_repo, mapping_repo, store, cfg, cache)
+
+    stored_time = datetime(2026, 9, 18, 9, 0, tzinfo=timezone.utc)
+    store.get_project_state = MagicMock(return_value=(
+        StatusCode.MAKING.value, stored_time
+    ))
+
+    new_fetch = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    await _refresh(refresher, [_make_project("PRJ-001",
+                                              status=StatusCode.MAKING,
+                                              status_changed_at=new_fetch)])
+    # cache 中的项目应该是 stored_time（持久化）
+    cached = cache.get("PRJ-001")
+    assert cached.status_changed_at == stored_time

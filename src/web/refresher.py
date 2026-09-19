@@ -37,6 +37,31 @@ class BackgroundRefresher:
         self._previous: dict[str, Project] = {}
         self._initialized = False
 
+    def _hydrate_status_changed_at(self, projects: list[Project]) -> None:
+        """用持久化的 project_state 覆盖 Project.status_changed_at。
+
+        SheetRepo.fetch_all 每次 rebuild dict 都把 status_changed_at 重写为
+        fetched_at（"首次见到"启发式），导致跨 refresh / 跨重启都丢失原始时间。
+        用 SQLite 里的 project_state 表覆盖：
+        - 项目无记录（首次见到）→ 用 fetch_all 给的时间，并写库
+        - 状态码未变 → 用库里记录的 status_changed_at（持久时间）
+        - 状态码变了 → 用新时间，并更新库
+        """
+        for p in projects:
+            if p.status is None:
+                continue
+            prev = self.store.get_project_state(p.project_id)
+            if prev is None:
+                self.store.upsert_project_state(
+                    p.project_id, p.status.value, p.status_changed_at
+                )
+            elif prev[0] != p.status.value:
+                self.store.upsert_project_state(
+                    p.project_id, p.status.value, p.status_changed_at
+                )
+            else:
+                p.status_changed_at = prev[1]
+
     async def refresh_now(
         self, spreadsheet_names: Optional[list[str]] = None
     ) -> dict[str, Any]:
@@ -61,6 +86,9 @@ class BackgroundRefresher:
         # fetch_all 是同步阻塞 —— 必须 to_thread
         try:
             projects = await asyncio.to_thread(self.sheet_repo.fetch_all, targets)
+            # SheetRepo 默认 status_changed_at = fetched_at（每次 rebuild dict 都重写）。
+            # 用持久化的 project_state 表覆盖，让 status_changed_at 跨重启持续。
+            self._hydrate_status_changed_at(projects)
             project_count = len(projects)
 
             # 计算状态变化（在替换 cache 与 _previous 之前）

@@ -51,6 +51,12 @@ CREATE TABLE IF NOT EXISTS status_history (
   detected_at     TEXT,
   PRIMARY KEY (project_id, status_code, detected_at)
 );
+
+CREATE TABLE IF NOT EXISTS project_state (
+  project_id          TEXT PRIMARY KEY,
+  status_code         TEXT,
+  status_changed_at   TEXT
+);
 """
 
 
@@ -194,5 +200,36 @@ class Store:
                    (project_id, status_code, detected_at)
                    VALUES (?, ?, ?)""",
                 (project_id, status_code, detected_at.isoformat()),
+            )
+            conn.commit()
+
+    def get_project_state(
+        self, project_id: str
+    ) -> Optional[tuple[str, datetime]]:
+        """返回 (status_code, status_changed_at)。无记录返回 None。
+
+        Phase 3：BackgroundRefresher 用它来跨 refresh / 跨重启持久化
+        status_changed_at，避免 SheetRepo 每次重建 dict 时重写为 fetched_at。
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT status_code, status_changed_at
+                   FROM project_state WHERE project_id = ?""",
+                (project_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return (row["status_code"], datetime.fromisoformat(row["status_changed_at"]))
+
+    def upsert_project_state(
+        self, project_id: str, status_code: str, status_changed_at: datetime
+    ) -> None:
+        """写入或覆盖 (project_id, status_code, status_changed_at)。"""
+        with self._conn() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO project_state
+                   (project_id, status_code, status_changed_at)
+                   VALUES (?, ?, ?)""",
+                (project_id, status_code, status_changed_at.isoformat()),
             )
             conn.commit()
