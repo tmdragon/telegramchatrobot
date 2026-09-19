@@ -92,3 +92,23 @@ def test_render_dryrun_preview_has_dryrun_prefix():
     now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
     text = render_dryrun_preview(p, m, now)
     assert "DRYRUN" in text.upper() or "试运行" in text or "预览" in text
+
+
+def test_render_broadcast_dates_are_backtick_wrapped():
+    """日期里的 '-' 是 MarkdownV2 保留字符；render_broadcast 必须用反引号包裹日期
+    否则 Telegram 解析时会抛 BadRequest ('character \"-\" is reserved')。"""
+    p = _project()
+    m = _mapping()
+    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
+    text = render_broadcast(p, m, now, exceeded_threshold=False)
+    # footer 日期必须被反引号包裹
+    assert "`09-18 21:00`" in text
+    # 历史流转日期同理（如果 status_history 长度 >= 2）
+    p2 = _project(
+        status_history=[
+            (StatusCode.ORDERED, datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc)),
+            (StatusCode.MAKING, datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)),
+        ],
+    )
+    text2 = render_broadcast(p2, m, now, exceeded_threshold=False)
+    assert "`09-10 09:00`" in text2

@@ -80,7 +80,7 @@ def _format_transition_line(project: Project) -> str:
     prev_cn = STATUS_DISPLAY_CN.get(prev_code, prev_code.value)
     curr_cn = STATUS_DISPLAY_CN.get(curr_code, curr_code.value)
     return (
-        f"▸ 最近流转：{prev_at.strftime('%m-%d %H:%M')} "
+        f"▸ 最近流转：`{prev_at.strftime('%m-%d %H:%M')}` "
         f"由 `{prev_cn}` → `{curr_cn}`"
     )
 
@@ -105,7 +105,7 @@ def render_broadcast(
     source_sheet_name: Optional[str] = None,
 ) -> str:
     name = project.project_name or "（未命名）"
-    head = f"📊 *{project.project_id} {name}*"
+    head = f"📊 *`{project.project_id}` {name}*"
     if exceeded_threshold:
         head += " ⚠"
     lines = [
@@ -114,7 +114,7 @@ def render_broadcast(
         _format_transition_line(project),
         _format_responsible_line(responsible_person, source_sheet_name),
         "",
-        f"— {now.strftime('%m-%d %H:%M')} 自动播报",
+        f"— `{now.strftime('%m-%d %H:%M')}` 自动播报",
     ]
     return "\n".join(lines)
 
