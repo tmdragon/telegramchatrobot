@@ -33,6 +33,7 @@ class Project:
     project_id: str
     project_name: Optional[str] = None
     status: Optional[StatusCode] = None
+    status_raw: Optional[str] = None  # sheet 状态列的原文本（normalize 之前的字符串）
     status_changed_at: Optional[datetime] = None
     status_history: list[tuple[StatusCode, datetime]] = field(default_factory=list)
     sheets: list[SheetView] = field(default_factory=list)

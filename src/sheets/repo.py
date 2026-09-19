@@ -82,6 +82,10 @@ class SheetRepo:
                 )
 
                 status = parse_status(row[status_col - 1]) if status_col and status_col <= len(row) else None
+                # sheet 状态列原文本（strip；空 → None）
+                raw_cell = row[status_col - 1] if status_col and status_col <= len(row) else None
+                status_raw = raw_cell.strip() if raw_cell else None
+                status_raw = status_raw or None
                 name = (row[name_col - 1].strip() or None) if name_col and name_col <= len(row) else None
 
                 if pid not in projects_by_id:
@@ -89,6 +93,7 @@ class SheetRepo:
                         project_id=pid,
                         project_name=name,
                         status=status,
+                        status_raw=status_raw,
                         status_changed_at=fetched_at,  # 首次见到该状态的时间
                         sheets=[sheet_view],
                     )
@@ -103,6 +108,9 @@ class SheetRepo:
                                 p.status_history.append((p.status, p.status_changed_at or fetched_at))
                             p.status = status
                             p.status_changed_at = fetched_at
+                    # 状态没变也允许更新 status_raw（多 sheet 可能写不同原文本）
+                    if status_raw and (p.status_raw != status_raw):
+                        p.status_raw = status_raw
                     p.sheets.append(sheet_view)
 
         return list(projects_by_id.values())

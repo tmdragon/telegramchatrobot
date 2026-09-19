@@ -62,14 +62,18 @@ STATUS_DISPLAY_CN: dict[StatusCode, str] = {
 
 
 def _format_status_line(project: Project, now: datetime) -> str:
-    if project.status is None:
+    if project.status is None and not project.status_raw:
         return "▸ 当前状态：未知"
-    emoji = STATUS_EMOJI.get(project.status, "⚪")
-    cn = STATUS_DISPLAY_CN.get(project.status, project.status.value)
+    emoji = STATUS_EMOJI.get(project.status, "⚪") if project.status else "⚪"
+    # 优先用 sheet 原文本；fallback 到 STATUS_DISPLAY_CN
+    if project.status_raw:
+        text = project.status_raw
+    else:
+        text = STATUS_DISPLAY_CN.get(project.status, project.status.value)
     dwell = 0
-    if project.status_changed_at:
+    if project.status_changed_at and project.status:
         dwell = max(0, int((now - project.status_changed_at).total_seconds()))
-    return f"▸ 当前状态：{emoji} {cn}（已停留 {humanize_duration(dwell)}）"
+    return f"▸ 当前状态：{emoji} {text}（已停留 {humanize_duration(dwell)}）"
 
 
 def _format_transition_line(project: Project) -> str:

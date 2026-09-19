@@ -112,3 +112,37 @@ def test_render_broadcast_dates_are_backtick_wrapped():
     )
     text2 = render_broadcast(p2, m, now, exceeded_threshold=False)
     assert "`09-10 09:00`" in text2
+
+
+def test_render_broadcast_prefers_status_raw_text_over_canonical():
+    """如果 Project.status_raw 已设置，播报用 sheet 原文本，不用 STATUS_DISPLAY_CN。"""
+    p = _project(status=StatusCode.MAKING, status_raw="制作中")
+    m = _mapping()
+    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
+    text = render_broadcast(p, m, now, exceeded_threshold=False)
+    # 当前状态行应该出现 sheet 原文本
+    assert "▸ 当前状态" in text
+    status_line = next(l for l in text.splitlines() if l.startswith("▸ 当前状态"))
+    assert "制作中" in status_line
+    # 当前状态行不应是 canonical "我方制作中"（transition 行还可以有 canonical，不在此断言）
+    assert "我方制作中" not in status_line
+
+
+def test_render_broadcast_status_raw_english_text_preserved():
+    """sheet 写英文 'MAKING' 时也原样显示。"""
+    p = _project(status=StatusCode.MAKING, status_raw="MAKING")
+    m = _mapping()
+    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
+    text = render_broadcast(p, m, now, exceeded_threshold=False)
+    status_line = next(l for l in text.splitlines() if l.startswith("▸ 当前状态"))
+    assert "MAKING" in status_line
+
+
+def test_render_broadcast_falls_back_to_canonical_when_no_status_raw():
+    """status_raw 为空时 fallback 到 STATUS_DISPLAY_CN。"""
+    p = _project(status=StatusCode.MAKING, status_raw=None)
+    m = _mapping()
+    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
+    text = render_broadcast(p, m, now, exceeded_threshold=False)
+    status_line = next(l for l in text.splitlines() if l.startswith("▸ 当前状态"))
+    assert "我方制作中" in status_line
