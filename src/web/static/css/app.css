@@ -361,6 +361,42 @@ a:hover { text-decoration: underline; }
 }
 @keyframes spinner-rotate { to { transform: rotate(360deg); } }
 
+/* ===== Refresh overlay (manual refresh feedback) ===== */
+.refresh-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: overlay-fade-in 0.15s ease-out;
+}
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.refresh-overlay__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-5) var(--s-6);
+  background: var(--c-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+}
+.refresh-overlay__panel .spinner {
+  width: 22px; height: 22px;
+  border-width: 2.5px;
+}
+.refresh-overlay__text {
+  font-size: 14px;
+  color: var(--c-text);
+  font-weight: 500;
+}
+
 /* ===== Row modifiers (mappings) ===== */
 .row--warn { background: var(--c-warning-soft); }
 .row--error { background: var(--c-danger-soft); }

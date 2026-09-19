@@ -37,8 +37,10 @@ async function _tick() {
 
 async function _manualRefresh() {
   // 手动刷新：POST /api/refresh 触发 sheet 拉取 + 状态变化播报
-  // 成功 → 立即 reload（最可靠的反馈；避免 JS 缓存导致 dynamic refresh 失效）
+  // 立即显示"刷新中..."覆盖层 + spinner（用户立刻看到反馈）
+  // POST 返回后 reload 页面（看到新数据）
   bus.dispatchEvent(new CustomEvent("refresh:start"));
+  const overlay = _showRefreshOverlay();
   let result;
   try {
     const r = await fetch("/api/refresh", {
@@ -49,16 +51,36 @@ async function _manualRefresh() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     result = await r.json();
   } catch (e) {
+    overlay.remove();
     errors.bump(`manual refresh failed: ${e.message}`);
     return;
   }
   bus.dispatchEvent(new CustomEvent("refresh:done", {
     detail: { broadcast_count: result.broadcast_count || 0 },
   }));
-  // 立刻 reload 页面 —— 用户最直接、可靠的反馈
-  // （dynamic refresh 由 overview-live.js 处理，但因为浏览器可能缓存旧 JS，
-  //   强制 reload 才能保证看到新数据）
-  window.location.reload();
+  // reload 前把 overlay 文案改成"刷新完成"+ 结果
+  _setOverlayText(overlay, result.broadcast_count
+    ? `✓ 已播报 ${result.broadcast_count} 条变化`
+    : "✓ 已是最新");
+  // 短暂停留让用户看到结果，然后 reload
+  setTimeout(() => window.location.reload(), 600);
+}
+
+function _showRefreshOverlay() {
+  const o = document.createElement("div");
+  o.className = "refresh-overlay";
+  o.innerHTML = `
+    <div class="refresh-overlay__panel">
+      <div class="spinner"></div>
+      <div class="refresh-overlay__text">刷新中…</div>
+    </div>`;
+  document.body.appendChild(o);
+  return o;
+}
+
+function _setOverlayText(o, text) {
+  const t = o.querySelector(".refresh-overlay__text");
+  if (t) t.textContent = text;
 }
 
 export function start({ intervalMs = 60_000 } = {}) {
