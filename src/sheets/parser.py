@@ -13,6 +13,7 @@ from src.models.status import StatusCode, normalize
 PROJECT_ID_CANDIDATES = ["项目编号", "编号", "ID", "Project ID", "项目 ID", "project_id"]
 STATUS_CANDIDATES = ["状态", "当前状态", "项目状态", "Status", "status"]
 PROJECT_NAME_CANDIDATES = ["项目名", "项目名称", "Name", "name"]
+PACKAGE_NAME_CANDIDATES = ["包名", "参数", "Package", "package", "Package Name", "package_name"]
 
 
 class HeaderDetector:
@@ -41,3 +42,11 @@ def parse_project_id(value: Optional[str]) -> Optional[str]:
 def parse_status(value: Optional[str]) -> Optional[StatusCode]:
     """状态解析：委托给 status.normalize。"""
     return normalize(value)
+
+
+def parse_package_name(value: Optional[str]) -> Optional[str]:
+    """包名解析：去首尾空格，空字符串视为 None。"""
+    if value is None:
+        return None
+    s = value.strip()
+    return s or None

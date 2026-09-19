@@ -271,6 +271,34 @@ async def test_projects_cmd_customer_no_mappings_returns_empty():
     assert "PAK-001" not in text
 
 
+async def test_projects_cmd_includes_package_name():
+    """ProjectSummary.package_name 应出现在 /projects 输出中。"""
+    cache = ProjectCache()
+    # 直接塞进 ProjectCache（绕过 list_summaries）
+    cache._projects["PAK-001"] = Project(
+        project_id="PAK-001", project_name="项目一",
+        package_name="ccv0(HTTPADJUST)",
+        status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+    )
+    mapping_repo = MagicMock()
+    mapping_repo.load_all = MagicMock(return_value=[
+        Mapping(project_id="PAK-001", chat_id="-100123", note="",
+                enabled=True, last_broadcast_at=None,
+                last_broadcast_status=None, last_error=None),
+    ])
+    u = _make_update(user_id=42, chat_id=-100123)
+    c = _make_context()
+    c.bot_data = {
+        "cache": cache, "mapping_repo": mapping_repo,
+        "admin_chat_id": ADMIN_ID,
+        "admin_broadcast_chats": [],
+    }
+    await projects_cmd(u, c)
+    text = u.message.reply_text.await_args.args[0]
+    assert "PAK-001" in text
+    assert "ccv0(HTTPADJUST)" in text
+
+
 # ---------- admin gates ----------
 
 async def test_force_broadcast_rejects_non_admin():

@@ -31,6 +31,7 @@ class ProjectSummary:
     editable_fields: int
     locked_field_names: list[str]
     status_raw: Optional[str] = None  # sheet 状态列原文本
+    package_name: Optional[str] = None  # sheet 包名/参数 列原文
 
 
 class ProjectCache:
@@ -115,5 +116,6 @@ class ProjectCache:
                 sheets=p.sheets,
                 editable_fields=editable,
                 locked_field_names=locked,
+                package_name=p.package_name,
             ))
         return out

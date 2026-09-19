@@ -17,9 +17,11 @@ from src.config import SpreadsheetConfig
 from src.models.project import Field, Project, SheetView
 from src.sheets.parser import (
     HeaderDetector,
+    PACKAGE_NAME_CANDIDATES,
     PROJECT_ID_CANDIDATES,
     PROJECT_NAME_CANDIDATES,
     STATUS_CANDIDATES,
+    parse_package_name,
     parse_project_id,
     parse_status,
 )
@@ -44,6 +46,7 @@ class SheetRepo:
             pid_col = detector.find_column(PROJECT_ID_CANDIDATES)
             status_col = detector.find_column(STATUS_CANDIDATES)
             name_col = detector.find_column(PROJECT_NAME_CANDIDATES)
+            pkg_col = detector.find_column(PACKAGE_NAME_CANDIDATES)
 
             if pid_col is None:
                 continue  # 此表无项目编号列，跳过
@@ -66,6 +69,8 @@ class SheetRepo:
                         recognized = "status"
                     elif name_col is not None and col_idx == name_col:
                         recognized = "project_name"
+                    elif pkg_col is not None and col_idx == pkg_col:
+                        recognized = "package_name"
                     fields.append(Field(
                         name=header,
                         value=value,
@@ -87,11 +92,13 @@ class SheetRepo:
                 status_raw = raw_cell.strip() if raw_cell else None
                 status_raw = status_raw or None
                 name = (row[name_col - 1].strip() or None) if name_col and name_col <= len(row) else None
+                pkg_name = parse_package_name(row[pkg_col - 1]) if pkg_col and pkg_col <= len(row) else None
 
                 if pid not in projects_by_id:
                     projects_by_id[pid] = Project(
                         project_id=pid,
                         project_name=name,
+                        package_name=pkg_name,
                         status=status,
                         status_raw=status_raw,
                         status_changed_at=fetched_at,  # 首次见到该状态的时间
@@ -101,6 +108,8 @@ class SheetRepo:
                     p = projects_by_id[pid]
                     if name and not p.project_name:
                         p.project_name = name
+                    if pkg_name and not p.package_name:
+                        p.package_name = pkg_name
                     if status:
                         if p.status != status:
                             # 状态变了，记录历史

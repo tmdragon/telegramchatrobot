@@ -32,6 +32,7 @@ class Project:
     """业务上的一个项目，可能跨多张 sheet。"""
     project_id: str
     project_name: Optional[str] = None
+    package_name: Optional[str] = None  # sheet "包名/参数" 列原文
     status: Optional[StatusCode] = None
     status_raw: Optional[str] = None  # sheet 状态列的原文本（normalize 之前的字符串）
     status_changed_at: Optional[datetime] = None

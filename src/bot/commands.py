@@ -138,7 +138,8 @@ async def projects_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     from src.bot.templates import status_display_text
     for s in summaries:
         status_text = status_display_text(s) or "未知"
-        lines.append(f"• `{s.project_id}` — `{status_text}`")
+        pkg = f" — `{s.package_name}`" if s.package_name else ""
+        lines.append(f"• `{s.project_id}`{pkg} — `{status_text}`")
     await _reply(update, "\n".join(lines))
 
 

@@ -107,3 +107,41 @@ def test_fetch_all_captures_status_raw_text():
     assert by_id["PRJ-002"].status_raw == "MAKING"
     assert by_id["PRJ-003"].status_raw == "验收中"  # strip 后
     assert by_id["PRJ-004"].status_raw is None  # 空 → None
+
+
+def test_fetch_all_captures_package_name():
+    """SheetRepo.fetch_all 必须把"包名/参数"列存进 Project.package_name。"""
+    fake_client = MagicMock()
+    fake_ws = _make_fake_worksheet([
+        ["项目编号", "项目名", "参数", "状态"],
+        ["PRJ-001", "项目一", "ccv0(HTTPADJUST)", "已上架"],
+        ["PRJ-002", "项目二", "packageA", "制作中"],
+        ["PRJ-003", "项目三", "  pkgB  ", "已上架"],  # 前后空格
+        ["PRJ-004", "项目四", "", "已上架"],          # 空
+    ])
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    ss = [SpreadsheetConfig(id="ss1", name="项目主表", role="master")]
+    projects = repo.fetch_all(ss)
+
+    by_id = {p.project_id: p for p in projects}
+    assert by_id["PRJ-001"].package_name == "ccv0(HTTPADJUST)"
+    assert by_id["PRJ-002"].package_name == "packageA"
+    assert by_id["PRJ-003"].package_name == "pkgB"  # strip 后
+    assert by_id["PRJ-004"].package_name is None  # 空 → None
+
+
+def test_fetch_all_recognizes_pkg_column_aliases():
+    """"包名" / "Package" 等候选列名都能识别。"""
+    fake_client = MagicMock()
+    fake_ws = _make_fake_worksheet([
+        ["项目编号", "项目名", "包名", "状态"],
+        ["PRJ-001", "项目一", "com.example.pkg", "已上架"],
+    ])
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    ss = [SpreadsheetConfig(id="ss1", name="项目主表", role="master")]
+    projects = repo.fetch_all(ss)
+    assert projects[0].package_name == "com.example.pkg"
