@@ -25,6 +25,7 @@
                class="overview-filter overview-filter--search"
                placeholder="🔍 搜索项目编号…"
                autocomplete="off">
+        <button type="button" id="filter-status-all" class="overview-filter overview-filter--toggle">全选</button>
         <div class="overview-status-filter" id="filter-status">
           <label class="status-chip status-chip--ordered">
             <input type="checkbox" value="ORDERED" checked>
@@ -97,6 +98,7 @@
             <span class="status-chip__name">未知</span>
           </label>
         </div>
+        <button type="button" id="filter-payment-all" class="overview-filter overview-filter--toggle">全选</button>
         <div class="overview-status-filter overview-payment-filter" id="filter-payment">
           <span class="overview-payment-filter__label">回款</span>
           <label class="status-chip status-chip--paid">
@@ -173,46 +175,9 @@
     </section>
   {% endif %}
 </main>
+<script type="module" src="/static/js/overview-filter.js" defer></script>
 <script type="module">
-  // 项目编号 / 状态筛选：客户端实时过滤（无服务器往返）
-  const idInput = document.getElementById("filter-id");
-  const statusFilter = document.getElementById("filter-status");
-  const paymentFilter = document.getElementById("filter-payment");
-  const counter = document.getElementById("filter-count");
-  function applyFilters() {
-    const q = (idInput?.value || "").trim().toLowerCase();
-    const checkedStatuses = new Set();
-    statusFilter?.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => {
-      checkedStatuses.add(cb.value);
-    });
-    const checkedPayments = new Set();
-    paymentFilter?.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => {
-      checkedPayments.add(cb.value);
-    });
-    let shown = 0, total = 0;
-    document.querySelectorAll("#overview-table .overview-row").forEach((tr) => {
-      total++;
-      const id = (tr.dataset.projectId || "").toLowerCase();
-      const rowSt = tr.dataset.status || "";
-      const rowPay = tr.dataset.payment || "";
-      const match =
-        (!q || id.includes(q)) &&
-        checkedStatuses.has(rowSt) &&
-        checkedPayments.has(rowPay);
-      tr.style.display = match ? "" : "none";
-      if (match) shown++;
-    });
-    if (counter) counter.textContent = total === shown ? "" : `显示 ${shown} / ${total}`;
-  }
-  if (idInput) idInput.addEventListener("input", applyFilters);
-  statusFilter?.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-    cb.addEventListener("change", applyFilters);
-  });
-  paymentFilter?.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-    cb.addEventListener("change", applyFilters);
-  });
-  applyFilters();
-  // 暴露给 overview-live.js：动态刷新后重新过滤
-  window.__cgr_applyFilters = applyFilters;
+  // 由 overview-filter.js 暴露的 start()；page-bootstrap 加载顺序确保其在后
+  import("/static/js/overview-filter.js").then((m) => m.start());
 </script>
 {% endblock %}

@@ -278,15 +278,14 @@ a:hover { text-decoration: underline; }
   font-weight: 500;
   background: var(--c-muted-soft);
   color: var(--c-text);
-  cursor: pointer;
+  cursor: grab;
   user-select: none;
-  transition: opacity 0.12s, transform 0.06s;
+  transition: opacity 0.12s, transform 0.06s, box-shadow 0.12s;
   border: 1px solid transparent;
 }
 .status-chip:hover { opacity: 0.85; }
-.status-chip:active { transform: scale(0.97); }
+.status-chip:active { cursor: grabbing; transform: scale(0.97); }
 .status-chip input[type="checkbox"] {
-  /* 用 :has() 让勾选状态影响 chip 外观 */
   margin: 0;
   cursor: pointer;
   accent-color: var(--c-text);
@@ -296,6 +295,31 @@ a:hover { text-decoration: underline; }
   background: transparent;
   text-decoration: line-through;
   color: var(--c-text-muted);
+}
+
+/* 拖拽中/可放置 */
+.status-chip--dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+.status-chip--drop-target {
+  box-shadow: 0 0 0 2px var(--c-primary);
+}
+
+/* 一键全选/全不选按钮 */
+.overview-filter--toggle {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px var(--s-3);
+  background: var(--c-surface);
+  color: var(--c-primary);
+  border: 1px solid var(--c-primary);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.overview-filter--toggle:hover {
+  background: var(--c-primary-soft);
 }
 
 /* 支付状态筛选区（与状态筛选区分开） */
