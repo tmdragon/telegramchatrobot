@@ -35,6 +35,7 @@ def create_app(
     bot_service: Optional[object] = None,
     scheduler: Optional[object] = None,
     admin_chat_id: Optional[int] = None,
+    admin_broadcast_chats: Optional[list[str]] = None,
 ) -> FastAPI:
     """构造并返回 FastAPI 应用实例。
 
@@ -42,6 +43,7 @@ def create_app(
         bot_service: Phase 3 注入 BotService 实例；为 None 时 lifespan 跳过 bot 启动。
         scheduler: Phase 3 注入 AsyncIOScheduler 实例；为 None 时跳过。
         admin_chat_id: 管理员 Telegram user id（int）；为 None 时 bot 命令 admin gate 全放行。
+        admin_broadcast_chats: 内部管理群 chat_id 列表（来自 scheduler.yaml），这些群里 /projects 看全表、/status 可查任意项目。
     """
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -57,6 +59,7 @@ def create_app(
             register_handlers(
                 bot_service._app,
                 admin_chat_id=admin_chat_id or 0,
+                admin_broadcast_chats=list(admin_broadcast_chats or []),
                 cache=cache,
                 broadcast_svc=broadcast_svc,
                 bot_service=bot_service,

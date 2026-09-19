@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
@@ -43,6 +43,30 @@ def _is_admin(update: Update, admin_chat_id: int) -> bool:
     return user is not None and user.id == admin_chat_id
 
 
+def _is_privileged_chat(
+    chat_id_str: str,
+    admin_chat_id: int,
+    admin_broadcast_chats: list[str],
+) -> bool:
+    """判断当前 chat 是否能看所有项目：admin 私聊 + 内部管理群。"""
+    if admin_chat_id and chat_id_str == str(admin_chat_id):
+        return True
+    return chat_id_str in (admin_broadcast_chats or [])
+
+
+async def _load_chat_mappings(context, chat_id_str: str) -> list:
+    """读取本 chat 启用映射的项目；mapping_repo 缺失或失败回退空列表。"""
+    mapping_repo = context.bot_data.get("mapping_repo")
+    if mapping_repo is None:
+        return []
+    import asyncio
+    try:
+        mappings = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception:  # noqa: BLE001
+        return []
+    return [m for m in mappings if str(m.chat_id) == chat_id_str and m.enabled]
+
+
 async def _reply(update: Update, text: str) -> None:
     await update.message.reply_text(text, parse_mode="MarkdownV2")
 
@@ -56,6 +80,18 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await _reply(update, "用法: `/status PRJ-XXX`")
         return
     pid = args[0]
+
+    # 客户群只能查本群映射的项目
+    chat = update.effective_chat
+    chat_id_str = str(chat.id) if chat else ""
+    admin_id = context.bot_data.get("admin_chat_id", 0)
+    admin_broadcast_chats = context.bot_data.get("admin_broadcast_chats") or []
+    if not _is_privileged_chat(chat_id_str, admin_id, admin_broadcast_chats):
+        mappings = await _load_chat_mappings(context, chat_id_str)
+        if not any(m.project_id == pid for m in mappings):
+            await _reply(update, f"🔒 项目 `{pid}` 不在本群映射中。")
+            return
+
     p = cache.get(pid)
     if p is None:
         await _reply(update, f"❓ 未找到项目 `{pid}`")
@@ -78,11 +114,26 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def projects_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     cache: ProjectCache = context.bot_data["cache"]
-    summaries = cache.list_summaries()
+    chat = update.effective_chat
+    chat_id_str = str(chat.id) if chat else ""
+    admin_id = context.bot_data.get("admin_chat_id", 0)
+    admin_broadcast_chats = context.bot_data.get("admin_broadcast_chats") or []
+    privileged = _is_privileged_chat(chat_id_str, admin_id, admin_broadcast_chats)
+
+    if privileged:
+        summaries = cache.list_summaries()
+        title = "📋 *所有项目*"
+    else:
+        # 客户群：按映射过滤
+        mappings = await _load_chat_mappings(context, chat_id_str)
+        allowed_pids = {m.project_id for m in mappings}
+        summaries = [s for s in cache.list_summaries() if s.project_id in allowed_pids]
+        title = "📋 *本群项目*"
+
     if not summaries:
-        await _reply(update, "暂无项目。")
+        await _reply(update, "本群暂无关联项目。" if not privileged else "暂无项目。")
         return
-    lines = ["📋 *所有项目*"]
+    lines = [title]
     for s in summaries:
         status_text = s.status.value if s.status else "未知"
         lines.append(f"• `{s.project_id}` — `{status_text}`")
@@ -166,6 +217,7 @@ def register_handlers(
     broadcast_svc: "BroadcastSvc",
     bot_service: "BotService",
     store: Any,
+    admin_broadcast_chats: Optional[list[str]] = None,
 ) -> None:
     """注册 6 个命令 + 1 个 user_id 监听。"""
     app.bot_data["cache"] = cache
@@ -173,6 +225,7 @@ def register_handlers(
     app.bot_data["bot_service"] = bot_service
     app.bot_data["store"] = store
     app.bot_data["admin_chat_id"] = admin_chat_id
+    app.bot_data["admin_broadcast_chats"] = list(admin_broadcast_chats or [])
     # mapping_repo 由 lifespan 单独挂（reload 用）
     # 这里不直接读 mapping_repo，避免循环 import；lifespan 在 register 前补
 
