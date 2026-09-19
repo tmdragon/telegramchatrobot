@@ -74,7 +74,17 @@ class Store:
     def init_schema(self) -> None:
         with self._conn() as conn:
             conn.executescript(SCHEMA)
+            # 兼容老库：补齐缺失列（CREATE TABLE IF NOT EXISTS 不会加列）
+            self._ensure_column(conn, "project_state", "payment_code", "TEXT")
+            self._ensure_column(conn, "project_state", "payment_changed_at", "TEXT")
             conn.commit()
+
+    def _ensure_column(self, conn, table: str, col: str, decl: str) -> None:
+        """如果表缺这一列就 ALTER TABLE 加上。"""
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        existing = {r["name"] for r in rows}
+        if col not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
 
     def save_sheet_snapshot(
         self,
