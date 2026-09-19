@@ -159,6 +159,11 @@ function _applyDiff(freshList) {
   // 更新项目计数
   const counter = document.querySelector("[data-project-count]");
   if (counter) counter.textContent = String(freshList.length);
+
+  // 重新应用筛选（动态刷新后保留当前过滤条件）
+  if (typeof window.__cgr_applyFilters === "function") {
+    window.__cgr_applyFilters();
+  }
 }
 
 async function _tick() {
