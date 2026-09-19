@@ -75,6 +75,81 @@ class BroadcastSvc:
         self._last_send_error = last_error
         return False
 
+    async def broadcast_project(self, project: Project) -> dict:
+        """单项目播报（事件驱动）。
+
+        与 broadcast_all 的区别：
+        - 不读 cache（直接用传入的 project 对象）
+        - 不受 skip_if_no_change 影响（已确认变化才调进来）
+        - 失败时也 notify_admin
+
+        Returns:
+            {sent, skipped, failed}
+        """
+        self._last_send_error = None
+
+        try:
+            mappings: list[Mapping] = await asyncio.to_thread(self.mapping_repo.load_all)
+        except Exception:  # noqa: BLE001
+            mappings = []
+
+        enabled_mappings = {m.project_id: m for m in mappings if m.enabled}
+        proj_mapping = enabled_mappings.get(project.project_id)
+
+        targets: list[tuple[str, Optional[Mapping]]] = []
+        if proj_mapping is not None:
+            targets.append((proj_mapping.chat_id, proj_mapping))
+        for ac in self.admin_broadcast_chats:
+            if not any(chat_id == ac for chat_id, _ in targets):
+                targets.append((ac, None))
+
+        if not targets:
+            return {"sent": 0, "skipped": 0, "failed": 0}
+
+        sent = 0
+        failed = 0
+        now = datetime.now(timezone.utc)
+        exceeded = self._exceeded_threshold(project)
+
+        for chat_id, target_mapping in targets:
+            if target_mapping is None:
+                target_mapping = proj_mapping or Mapping(
+                    project_id=project.project_id,
+                    chat_id=chat_id,
+                )
+            text = render_broadcast(project, target_mapping, now, exceeded)
+            ok = await self._send_with_retry(chat_id, text)
+            sent_at = datetime.now(timezone.utc)
+            if ok:
+                sent += 1
+                self.store.log_broadcast(
+                    project_id=project.project_id,
+                    chat_id=chat_id,
+                    status_code=project.status.value if project.status else "UNKNOWN",
+                    message_text=text,
+                    sent_at=sent_at,
+                    success=True,
+                    error=None,
+                )
+                if project.status and project.status_changed_at:
+                    self.store.record_status(
+                        project.project_id, project.status.value, project.status_changed_at
+                    )
+            else:
+                failed += 1
+                if proj_mapping is not None and chat_id == proj_mapping.chat_id:
+                    proj_mapping.last_error = f"❌ 无法发送: {self._last_send_error}"
+                    await asyncio.to_thread(self.store.save_mapping_snapshot, proj_mapping)
+
+        if failed > 0:
+            from src.bot.notifications import notify_admin
+            await notify_admin(
+                self.bot_service, self.admin_chat_id,
+                f"⚠ 状态变化播报失败: project={project.project_id} failed={failed}",
+            )
+
+        return {"sent": sent, "skipped": 0, "failed": failed}
+
     async def broadcast_all(
         self,
         skip_if_no_change: bool = True,

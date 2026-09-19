@@ -33,6 +33,9 @@ class BackgroundRefresher:
         self.store = store
         self.cfg = cfg
         self.cache = cache
+        # 状态变化检测：上次 refresh 后的 project 快照
+        self._previous: dict[str, Project] = {}
+        self._initialized = False
 
     async def refresh_now(
         self, spreadsheet_names: Optional[list[str]] = None
@@ -59,6 +62,24 @@ class BackgroundRefresher:
         try:
             projects = await asyncio.to_thread(self.sheet_repo.fetch_all, targets)
             project_count = len(projects)
+
+            # 计算状态变化（在替换 cache 与 _previous 之前）
+            is_first_refresh = not self._initialized
+            changes: list[Project] = []
+            new_index = {p.project_id: p for p in projects}
+            if not is_first_refresh:
+                for pid, new_p in new_index.items():
+                    old_p = self._previous.get(pid)
+                    if old_p is None:
+                        # 新出现的项目 → 视为变化
+                        changes.append(new_p)
+                    elif (old_p.status != new_p.status
+                          or old_p.status_changed_at != new_p.status_changed_at):
+                        # 状态码或 status_changed_at 变化 → 视为变化
+                        changes.append(new_p)
+            # 提交新快照
+            self._previous = new_index
+            self._initialized = True
             self.cache.replace(projects)
             # 持久化
             now = datetime.now(timezone.utc)
@@ -102,4 +123,6 @@ class BackgroundRefresher:
             "refreshed_at": datetime.now(timezone.utc).isoformat(),
             "project_count": project_count,
             "per_spreadsheet": per_ss,
+            "changes": changes,
+            "is_first_refresh": is_first_refresh,
         }

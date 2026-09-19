@@ -69,7 +69,7 @@ async def test_e2e_scheduler_wrapper_triggers_broadcast():
     svc = BroadcastSvc(bot, mr, store, cache, admin_chat_id=42,
                        retry_delays=(0, 0, 0))
     cfg = BroadcastConfig(times=["09:00", "18:00"], weekdays_only=False,
-                          skip_if_no_change=True)
+                          skip_if_no_change=True, refresh_interval_minutes=0)  # 强制 cron 路径
     scheduler = build_scheduler(svc, cfg)
     # 直接调 wrapper，绕过 cron
     await _broadcast_job_wrapper(svc, cfg)

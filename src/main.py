@@ -105,7 +105,9 @@ def main(argv: list[str] | None = None) -> int:
         per_status_thresholds=scheduler_cfg.per_status_thresholds,
         admin_broadcast_chats=scheduler_cfg.admin_broadcast_chats,
     ) if bot_service is not None else None
-    scheduler = build_scheduler(broadcast_svc, scheduler_cfg) if bot_service is not None else None
+    # 提前构造 refresher，事件驱动模式下 scheduler 需要它
+    refresher = BackgroundRefresher(repo, mapping_repo, store, cfg, cache)
+    scheduler = build_scheduler(broadcast_svc, scheduler_cfg, refresher=refresher) if bot_service is not None else None
 
     app = create_app(
         cfg=cfg,
@@ -121,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     app.state.cache = cache
     app.state.broadcast_svc = broadcast_svc
-    app.state.refresher = BackgroundRefresher(repo, mapping_repo, store, cfg, cache)
+    app.state.refresher = refresher  # 复用 scheduler 用的同一个实例
 
     print(f"[ui] Listening on http://{cfg.ui_bind}:{cfg.ui_port}")
     print(f"[bot] token={cfg.telegram_bot_token[:6]}... admin={cfg.admin_chat_id}")

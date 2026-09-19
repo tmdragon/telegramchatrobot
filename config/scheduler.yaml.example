@@ -14,3 +14,8 @@ broadcast:
   # 留空 = 不发到任何内部群。
   admin_broadcast_chats:
     - "-1004465951132"   # 替换为你的内部管理群 chat_id
+
+  # 事件驱动模式：每 N 分钟 refresh sheet，状态变化立即播报该项目
+  # 设为 0 则改用上面 times[] 的 cron 定时全员播报（旧模式）
+  # 默认 5 分钟；推荐 2-5 分钟；过低会增加 Google API 调用频率
+  refresh_interval_minutes: 5

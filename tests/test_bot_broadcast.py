@@ -246,3 +246,74 @@ async def test_admin_broadcast_chats_receive_all_projects():
     assert ("PRJ-001", "-100") in logged_pairs
     assert ("PRJ-001", "-200") in logged_pairs
     assert ("PRJ-002", "-200") in logged_pairs
+
+
+# ---------- broadcast_project (单项目播报，事件驱动) ----------
+
+async def test_broadcast_project_sends_to_project_chat():
+    bot_service, mapping_repo, store, cache = _deps()
+    svc = BroadcastSvc(bot_service, mapping_repo, store, cache, ADMIN_ID,
+                       retry_delays=(0, 0, 0))
+    p = cache.get("PRJ-001")
+    result = await svc.broadcast_project(p)
+    assert result["sent"] == 1
+    bot_service.send_message.assert_awaited_once()
+    args = bot_service.send_message.await_args
+    assert args.args[0] == "100"  # mapping 的 chat_id
+    store.log_broadcast.assert_called_once()
+
+
+async def test_broadcast_project_also_sends_to_admin_chats():
+    bot_service, mapping_repo, store, cache = _deps()
+    svc = BroadcastSvc(
+        bot_service, mapping_repo, store, cache, ADMIN_ID,
+        admin_broadcast_chats=["-200"],
+        retry_delays=(0, 0, 0),
+    )
+    p = cache.get("PRJ-001")
+    result = await svc.broadcast_project(p)
+    # PRJ-001 → 客户群 "100" + 内部群 "-200"
+    assert result["sent"] == 2
+    chat_ids = [c.args[0] for c in bot_service.send_message.await_args_list]
+    assert "100" in chat_ids
+    assert "-200" in chat_ids
+
+
+async def test_broadcast_project_no_mapping_returns_empty():
+    bot_service, mapping_repo, store, cache = _deps()
+    mapping_repo.load_all = MagicMock(return_value=[])
+    svc = BroadcastSvc(bot_service, mapping_repo, store, cache, ADMIN_ID,
+                       retry_delays=(0, 0, 0))
+    p = cache.get("PRJ-001")
+    result = await svc.broadcast_project(p)
+    assert result["sent"] == 0
+    bot_service.send_message.assert_not_awaited()
+
+
+async def test_broadcast_project_failed_sends_notify_admin():
+    bot_service, mapping_repo, store, cache = _deps(
+        send_message_side_effect=RuntimeError("boom")
+    )
+    svc = BroadcastSvc(bot_service, mapping_repo, store, cache, ADMIN_ID,
+                       retry_delays=(0, 0, 0))
+    p = cache.get("PRJ-001")
+    result = await svc.broadcast_project(p)
+    assert result["failed"] == 1
+    # notify_admin 也会调 send_message（admin_chat_id）
+    assert bot_service.send_message.await_count >= 4
+
+
+async def test_broadcast_project_does_not_check_skip_if_no_change():
+    """事件驱动播报不应受 skip_if_no_change 影响（已确认状态变化）。"""
+    bot_service, mapping_repo, store, cache = _deps()
+    # latest_successful_broadcast 返回当前 status → skip_if_no_change 会跳过
+    p = cache.get("PRJ-001")
+    store.latest_successful_broadcast = MagicMock(return_value=(
+        p.status.value, p.status_changed_at.isoformat(), "old"
+    ))
+    svc = BroadcastSvc(bot_service, mapping_repo, store, cache, ADMIN_ID,
+                       retry_delays=(0, 0, 0))
+    result = await svc.broadcast_project(p)
+    assert result["sent"] == 1
+    assert result["skipped"] == 0
+    bot_service.send_message.assert_awaited_once()

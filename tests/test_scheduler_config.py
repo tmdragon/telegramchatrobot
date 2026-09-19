@@ -67,3 +67,35 @@ def test_admin_broadcast_chats_default_empty(tmp_path: Path):
     p.write_text("broadcast:\n  times: ['09:00']\n", encoding="utf-8")
     cfg = load_scheduler_config(p)
     assert cfg.admin_broadcast_chats == []
+
+
+def test_refresh_interval_minutes_parsed(tmp_path: Path):
+    p = tmp_path / "scheduler.yaml"
+    p.write_text(
+        "broadcast:\n"
+        "  times: ['09:00']\n"
+        "  refresh_interval_minutes: 2\n",
+        encoding="utf-8",
+    )
+    cfg = load_scheduler_config(p)
+    assert cfg.refresh_interval_minutes == 2
+
+
+def test_refresh_interval_minutes_default(tmp_path: Path):
+    """未配 refresh_interval_minutes 时默认 5（事件驱动模式）。"""
+    p = tmp_path / "scheduler.yaml"
+    p.write_text("broadcast:\n  times: ['09:00']\n", encoding="utf-8")
+    cfg = load_scheduler_config(p)
+    assert cfg.refresh_interval_minutes == 5
+
+
+def test_refresh_interval_minutes_zero_means_legacy_cron(tmp_path: Path):
+    p = tmp_path / "scheduler.yaml"
+    p.write_text(
+        "broadcast:\n"
+        "  times: ['09:00']\n"
+        "  refresh_interval_minutes: 0\n",
+        encoding="utf-8",
+    )
+    cfg = load_scheduler_config(p)
+    assert cfg.refresh_interval_minutes == 0
