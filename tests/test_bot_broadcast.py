@@ -195,3 +195,54 @@ async def test_project_not_in_cache_is_skipped():
     result = await svc.broadcast_all(skip_if_no_change=False, dryrun=False)
     assert result["sent"] == 0
     bot_service.send_message.assert_not_awaited()
+
+
+# ---------- admin_broadcast_chats ----------
+
+async def test_admin_broadcast_chats_receive_all_projects():
+    """内部管理群（admin_broadcast_chats 配置）应收到 cache 中所有项目的播报；
+    客户群（项目映射的 chat_id）只收自己的项目。"""
+    bot_service = MagicMock()
+    bot_service.send_message = AsyncMock()
+
+    # PRJ-001 有自己的客户群 -100；PRJ-002 没有客户群映射
+    mapping_repo = MagicMock()
+    mapping_repo.load_all = MagicMock(return_value=[_mapping("PRJ-001", "-100")])
+
+    store = MagicMock()
+    store.latest_successful_broadcast = MagicMock(return_value=None)
+    store.log_broadcast = MagicMock()
+    store.record_status = MagicMock()
+    store.save_mapping_snapshot = MagicMock()
+
+    cache = ProjectCache()
+    cache.replace([
+        _project("PRJ-001"),
+        _project("PRJ-002", status=StatusCode.PUBLISHED),
+    ])
+
+    svc = BroadcastSvc(
+        bot_service, mapping_repo, store, cache, ADMIN_ID,
+        admin_broadcast_chats=["-200"],  # 内部群
+        retry_delays=(0, 0, 0),
+    )
+    await svc.broadcast_all(skip_if_no_change=False, dryrun=False)
+
+    # PRJ-001 → 客户群 -100 + 内部群 -200
+    # PRJ-002 → 内部群 -200（无客户群）
+    # 总共 3 次 send
+    assert bot_service.send_message.await_count == 3
+
+    calls = bot_service.send_message.await_args_list
+    chat_ids = [c.args[0] for c in calls]
+    assert chat_ids.count("-200") == 2  # 内部群收 2 个项目
+    assert chat_ids.count("-100") == 1  # 客户群只收 1 个项目
+
+    # log_broadcast 也按 (project_id, chat_id) 对独立计数
+    logged_pairs = [
+        (c.kwargs["project_id"], c.kwargs["chat_id"])
+        for c in store.log_broadcast.call_args_list
+    ]
+    assert ("PRJ-001", "-100") in logged_pairs
+    assert ("PRJ-001", "-200") in logged_pairs
+    assert ("PRJ-002", "-200") in logged_pairs

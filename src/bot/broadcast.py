@@ -36,6 +36,7 @@ class BroadcastSvc:
         admin_chat_id: int,
         *,
         per_status_thresholds: Optional[dict[str, int]] = None,
+        admin_broadcast_chats: Optional[list[str]] = None,
         retry_delays: tuple[float, ...] = (1.0, 2.0, 4.0),
     ) -> None:
         self.bot_service = bot_service
@@ -48,6 +49,8 @@ class BroadcastSvc:
             "MAKING": 14, "CLIENT_REVIEW": 7, "UNPAID": 30,
             **(per_status_thresholds or {}),
         }
+        # 内部管理群（与 admin_chat_id 私聊告警不同；这些群收所有项目的播报）
+        self.admin_broadcast_chats: list[str] = list(admin_broadcast_chats or [])
         self.retry_delays = retry_delays
 
     def _exceeded_threshold(self, project) -> bool:
@@ -90,63 +93,80 @@ class BroadcastSvc:
         except Exception:  # noqa: BLE001
             mappings = []  # 整段失败视为无可播报
 
+        # project_id → enabled mapping 索引
+        enabled_mappings = {m.project_id: m for m in mappings if m.enabled}
+
         sent = 0
         skipped = 0
         failed = 0
         first_preview: Optional[str] = None
 
-        for m in mappings:
-            if not m.enabled:
-                continue
-            project = self.cache.get(m.project_id)
-            if project is None:
-                # cache 里没该项目（refresher 未拉到）→ skip
-                continue
+        for project in self.cache.list_projects():
+            if project.status is None or project.status_changed_at is None:
+                continue  # 没状态的项目跳过
 
             now = datetime.now(timezone.utc)
             exceeded = self._exceeded_threshold(project)
 
-            # skip_if_no_change 判定：当前 (status_code, status_changed_at) 与最近成功记录匹配 → skip
-            if (
-                skip_if_no_change
-                and project.status is not None
-                and project.status_changed_at is not None
-            ):
-                last = self.store.latest_successful_broadcast(m.project_id, m.chat_id)
-                if last is not None:
-                    last_code, last_changed_at, _last_text = last
-                    curr_changed_at = project.status_changed_at.isoformat()
-                    if last_changed_at == curr_changed_at and last_code == project.status.value:
-                        skipped += 1
-                        continue
+            # 构建该项目的播报目标：(chat_id, 可选 source Mapping)
+            proj_mapping = enabled_mappings.get(project.project_id)
+            targets: list[tuple[str, Optional[Mapping]]] = []
+            if proj_mapping is not None:
+                targets.append((proj_mapping.chat_id, proj_mapping))
+            for ac in self.admin_broadcast_chats:
+                # 去重：如果 admin chat 恰好等于项目自己的 chat，不再重复发送
+                if not any(chat_id == ac for chat_id, _ in targets):
+                    targets.append((ac, None))
 
-            text = render_broadcast(project, m, now, exceeded)
+            for chat_id, target_mapping in targets:
+                # skip_if_no_change 判定：(project_id, chat_id) 对独立计数
+                if skip_if_no_change:
+                    last = self.store.latest_successful_broadcast(project.project_id, chat_id)
+                    if last is not None:
+                        last_code, last_changed_at, _last_text = last
+                        curr_changed_at = project.status_changed_at.isoformat()
+                        if last_changed_at == curr_changed_at and last_code == project.status.value:
+                            skipped += 1
+                            continue
 
-            if dryrun:
-                first_preview = render_dryrun_preview(project, m, now)
-                continue  # 不发不写 log
-
-            ok = await self._send_with_retry(m.chat_id, text)
-            sent_at = datetime.now(timezone.utc)
-            if ok:
-                sent += 1
-                self.store.log_broadcast(
-                    project_id=m.project_id,
-                    chat_id=m.chat_id,
-                    status_code=project.status.value if project.status else "UNKNOWN",
-                    message_text=text,
-                    sent_at=sent_at,
-                    success=True,
-                    error=None,
-                )
-                if project.status and project.status_changed_at:
-                    self.store.record_status(
-                        m.project_id, project.status.value, project.status_changed_at
+                # admin chat 没有自己的 mapping，用项目自身 mapping 或 stub
+                if target_mapping is None:
+                    target_mapping = proj_mapping or Mapping(
+                        project_id=project.project_id,
+                        chat_id=chat_id,
                     )
-            else:
-                failed += 1
-                m.last_error = f"❌ 无法发送: {self._last_send_error}"
-                await asyncio.to_thread(self.store.save_mapping_snapshot, m)
+
+                text = render_broadcast(project, target_mapping, now, exceeded)
+
+                if dryrun:
+                    if first_preview is None:
+                        first_preview = render_dryrun_preview(project, target_mapping, now)
+                    continue
+
+                ok = await self._send_with_retry(chat_id, text)
+                sent_at = datetime.now(timezone.utc)
+                if ok:
+                    sent += 1
+                    self.store.log_broadcast(
+                        project_id=project.project_id,
+                        chat_id=chat_id,
+                        status_code=project.status.value,
+                        message_text=text,
+                        sent_at=sent_at,
+                        success=True,
+                        error=None,
+                    )
+                    self.store.record_status(
+                        project.project_id,
+                        project.status.value,
+                        project.status_changed_at,
+                    )
+                else:
+                    failed += 1
+                    # 仅在项目自己的 mapping 上写 last_error（admin chat 无对应 mapping）
+                    if proj_mapping is not None and chat_id == proj_mapping.chat_id:
+                        proj_mapping.last_error = f"❌ 无法发送: {self._last_send_error}"
+                        await asyncio.to_thread(self.store.save_mapping_snapshot, proj_mapping)
 
         # 失败汇总 → 管理员告警
         if failed > 0 and not dryrun:

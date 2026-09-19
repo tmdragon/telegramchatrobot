@@ -9,3 +9,8 @@ broadcast:
     MAKING: 14          # 超过 14 天 → ⚠
     CLIENT_REVIEW: 7
     UNPAID: 30
+  # 内部管理群（区别于 admin_chat_id 私聊告警）：
+  # 这些群会收所有项目的播报。客户群（项目群映射 sheet 里配置的）只收自己的项目。
+  # 留空 = 不发到任何内部群。
+  admin_broadcast_chats:
+    - "-1001234567890"   # 替换为你的内部管理群 chat_id

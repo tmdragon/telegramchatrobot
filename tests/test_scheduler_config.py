@@ -46,3 +46,24 @@ def test_times_must_be_hhmm_format(tmp_path: Path):
     p.write_text("broadcast:\n  times: ['bad-time']\n", encoding="utf-8")
     with pytest.raises(ValueError):
         load_scheduler_config(p)
+
+
+def test_admin_broadcast_chats_parsed(tmp_path: Path):
+    p = tmp_path / "scheduler.yaml"
+    p.write_text(
+        "broadcast:\n"
+        "  times: ['09:00']\n"
+        "  admin_broadcast_chats:\n"
+        "    - '-1001234567890'\n"
+        "    - '-1009876543210'\n",
+        encoding="utf-8",
+    )
+    cfg = load_scheduler_config(p)
+    assert cfg.admin_broadcast_chats == ["-1001234567890", "-1009876543210"]
+
+
+def test_admin_broadcast_chats_default_empty(tmp_path: Path):
+    p = tmp_path / "scheduler.yaml"
+    p.write_text("broadcast:\n  times: ['09:00']\n", encoding="utf-8")
+    cfg = load_scheduler_config(p)
+    assert cfg.admin_broadcast_chats == []

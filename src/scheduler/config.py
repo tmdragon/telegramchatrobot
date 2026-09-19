@@ -17,6 +17,7 @@ class BroadcastConfig:
     weekdays_only: bool = True
     skip_if_no_change: bool = True
     per_status_thresholds: dict[str, int] = field(default_factory=dict)
+    admin_broadcast_chats: list[str] = field(default_factory=list)
 
 
 def load_scheduler_config(path: Path) -> BroadcastConfig:
@@ -45,4 +46,5 @@ def load_scheduler_config(path: Path) -> BroadcastConfig:
         weekdays_only=bool(bc.get("weekdays_only", True)),
         skip_if_no_change=bool(bc.get("skip_if_no_change", True)),
         per_status_thresholds=dict(bc.get("per_status_thresholds") or {}),
+        admin_broadcast_chats=list(bc.get("admin_broadcast_chats") or []),
     )

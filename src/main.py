@@ -38,18 +38,23 @@ def main(argv: list[str] | None = None) -> int:
 
     client = make_gspread_client(cfg.google_service_account_json)
     repo = SheetRepo(client)
+    from src.web.cache import ProjectCache
+    cache = ProjectCache()
     projects = repo.fetch_all(cfg.spreadsheets)
     print(f"[data] Loaded {len(projects)} projects")
     for p in projects:
         status = p.status.value if p.status else "UNKNOWN"
         print(f"  • {p.project_id} {p.project_name or ''} — {status}")
 
+    # 把首次拉到的项目灌进 cache（UI 立即可见，无需等 background refresher）
+    cache.replace(projects)
+
     # 持久化 sheet 快照（Phase 1 简化：把整个 Project 序列化为快照）
     from datetime import datetime, timezone
     fetched_at = datetime.now(timezone.utc)
     for ss in cfg.spreadsheets:
         try:
-            sh = client.open(ss.name)
+            sh = client.open_by_key(ss.id)
             ws = sh.worksheet(ss.name)
             rows = ws.get_all_values()
             store.save_sheet_snapshot(
@@ -75,15 +80,15 @@ def main(argv: list[str] | None = None) -> int:
     # ========== Phase 2 + Phase 3: 启动 FastUI + Bot + Scheduler ==========
     # 把所有 deps 注入到 FastAPI app
     from src.web.app import create_app
-    from src.web.cache import ProjectCache
     from src.web.refresher import BackgroundRefresher
     from src.bot.service import BotService
     from src.bot.broadcast import BroadcastSvc
     from src.scheduler.config import load_scheduler_config
     from src.scheduler.jobs import build_scheduler
 
-    cache = ProjectCache()
-    bot_service = BotService()
+    # Token 是占位符时不构造 BotService（让 lifespan 跳过 bot/scheduler，仅跑 UI）
+    token = cfg.telegram_bot_token or ""
+    bot_service = BotService() if (token and ":" in token and not token.startswith("REPLACE")) else None
     scheduler_cfg_path = Path("config/scheduler.yaml")
     # 缺 scheduler.yaml 时回退默认配置（BroadcastConfig 自带 times/weekdays_only 默认）
     try:
@@ -98,8 +103,9 @@ def main(argv: list[str] | None = None) -> int:
         cache=cache,
         admin_chat_id=int(cfg.admin_chat_id),
         per_status_thresholds=scheduler_cfg.per_status_thresholds,
-    )
-    scheduler = build_scheduler(broadcast_svc, scheduler_cfg)
+        admin_broadcast_chats=scheduler_cfg.admin_broadcast_chats,
+    ) if bot_service is not None else None
+    scheduler = build_scheduler(broadcast_svc, scheduler_cfg) if bot_service is not None else None
 
     app = create_app(
         cfg=cfg,
@@ -108,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         mapping_repo=mapping_repo,
         bot_service=bot_service,
         scheduler=scheduler,
-        admin_chat_id=int(cfg.admin_chat_id),
+        admin_chat_id=int(cfg.admin_chat_id) if bot_service is not None else None,
     )
     app.state.cache = cache
     app.state.broadcast_svc = broadcast_svc

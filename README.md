@@ -132,6 +132,7 @@ UI 项目映射管理页 → 选中 mapping → 「测试发送」按钮（Phase
 - 状态无变化 → 跳过（spec §6.3 skip_if_no_change）
 - 超过 per_status_thresholds 天数 → 文案带 ⚠
 - Telegram API 失败 → 1s/2s/4s 指数退避重试；最终失败标记 mapping `❌ 无法发送`，管理员私聊告警
+- **多群分发**：`scheduler.yaml` 的 `admin_broadcast_chats` 列出的群会收**所有项目**的播报；项目群映射 sheet 里配的客户群只收**自己的项目**
 
 ### 7. 依赖
 
