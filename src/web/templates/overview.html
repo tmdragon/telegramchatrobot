@@ -25,25 +25,88 @@
                class="overview-filter overview-filter--search"
                placeholder="🔍 搜索项目编号…"
                autocomplete="off">
-        <select id="filter-status" class="overview-filter overview-filter--select">
-          <option value="">所有状态</option>
-          <option value="ORDERED">对方下单</option>
-          <option value="MAKING">我方制作中</option>
-          <option value="CLIENT_REVIEW">对方验收中</option>
-          <option value="REWORK">返工中</option>
-          <option value="WAITING_AAB">等待AAB包</option>
-          <option value="WAITING_SUBMIT">等待提审</option>
-          <option value="SUBMITTING">提审中</option>
-          <option value="FIRST_REVIEW_PASSED">一审通过</option>
-          <option value="FIRST_REVIEW_REJECTED">一审打回</option>
-          <option value="SECOND_REVIEW">复审中</option>
-          <option value="REMAKING">我方重做中</option>
-          <option value="PUBLISHED">已发布</option>
-          <option value="PAID">对方已回款</option>
-          <option value="UNPAID">对方未回款</option>
-          <option value="OFF_SHELF">已下架</option>
-          <option value="NONE">未知</option>
-        </select>
+        <div class="overview-status-filter" id="filter-status">
+          <label class="status-chip status-chip--ordered">
+            <input type="checkbox" value="ORDERED" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">对方下单</span>
+          </label>
+          <label class="status-chip status-chip--making">
+            <input type="checkbox" value="MAKING" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">我方制作中</span>
+          </label>
+          <label class="status-chip status-chip--client-review">
+            <input type="checkbox" value="CLIENT_REVIEW" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">对方验收中</span>
+          </label>
+          <label class="status-chip status-chip--rework">
+            <input type="checkbox" value="REWORK" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">返工中</span>
+          </label>
+          <label class="status-chip status-chip--waiting-aab">
+            <input type="checkbox" value="WAITING_AAB" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">等待AAB包</span>
+          </label>
+          <label class="status-chip status-chip--waiting-submit">
+            <input type="checkbox" value="WAITING_SUBMIT" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">等待提审</span>
+          </label>
+          <label class="status-chip status-chip--submitting">
+            <input type="checkbox" value="SUBMITTING" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">提审中</span>
+          </label>
+          <label class="status-chip status-chip--first-passed">
+            <input type="checkbox" value="FIRST_REVIEW_PASSED" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">一审通过</span>
+          </label>
+          <label class="status-chip status-chip--first-rejected">
+            <input type="checkbox" value="FIRST_REVIEW_REJECTED" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">一审打回</span>
+          </label>
+          <label class="status-chip status-chip--second-review">
+            <input type="checkbox" value="SECOND_REVIEW" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">复审中</span>
+          </label>
+          <label class="status-chip status-chip--remaking">
+            <input type="checkbox" value="REMAKING" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">我方重做中</span>
+          </label>
+          <label class="status-chip status-chip--published">
+            <input type="checkbox" value="PUBLISHED" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">已发布</span>
+          </label>
+          <label class="status-chip status-chip--paid">
+            <input type="checkbox" value="PAID" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">对方已回款</span>
+          </label>
+          <label class="status-chip status-chip--unpaid">
+            <input type="checkbox" value="UNPAID" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">对方未回款</span>
+          </label>
+          <label class="status-chip status-chip--off-shelf">
+            <input type="checkbox" value="OFF_SHELF" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">已下架</span>
+          </label>
+          <label class="status-chip status-chip--unknown">
+            <input type="checkbox" value="NONE" checked>
+            <span class="status-badge__dot"></span>
+            <span class="status-chip__name">未知</span>
+          </label>
+        </div>
         <span class="overview-filters__count" id="filter-count"></span>
       </div>
       <table class="overview-table" id="overview-table">
@@ -104,25 +167,30 @@
 <script type="module">
   // 项目编号 / 状态筛选：客户端实时过滤（无服务器往返）
   const idInput = document.getElementById("filter-id");
-  const statusSelect = document.getElementById("filter-status");
+  const statusFilter = document.getElementById("filter-status");
   const counter = document.getElementById("filter-count");
   function applyFilters() {
     const q = (idInput?.value || "").trim().toLowerCase();
-    const st = statusSelect?.value || "";
+    // 收集所有勾选的状态码
+    const checkedStatuses = new Set();
+    statusFilter?.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => {
+      checkedStatuses.add(cb.value);
+    });
     let shown = 0, total = 0;
     document.querySelectorAll("#overview-table .overview-row").forEach((tr) => {
       total++;
       const id = (tr.dataset.projectId || "").toLowerCase();
       const rowSt = tr.dataset.status || "";
-      const match = (!q || id.includes(q)) && (!st || rowSt === st);
+      const match = (!q || id.includes(q)) && checkedStatuses.has(rowSt);
       tr.style.display = match ? "" : "none";
       if (match) shown++;
     });
     if (counter) counter.textContent = total === shown ? "" : `显示 ${shown} / ${total}`;
   }
   if (idInput) idInput.addEventListener("input", applyFilters);
-  if (statusSelect) statusSelect.addEventListener("change", applyFilters);
-  // 初次执行（如有初始值）
+  statusFilter?.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", applyFilters);
+  });
   applyFilters();
   // 暴露给 overview-live.js：动态刷新后重新过滤
   window.__cgr_applyFilters = applyFilters;

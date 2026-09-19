@@ -248,20 +248,79 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
 }
 .overview-filter--search {
-  flex: 1;
+  flex: 0 1 240px;
   min-width: 0;
   max-width: 280px;
 }
-.overview-filter--select {
-  cursor: pointer;
-  min-width: 140px;
+.overview-status-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  flex: 1;
+  min-width: 0;
 }
 .overview-filters__count {
   margin-left: auto;
   font-size: 12px;
   color: var(--c-text-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+
+/* 状态筛选 chip（复选框 + 颜色预览 + 状态名） */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 3px var(--s-2) 3px var(--s-2);
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--c-muted-soft);
+  color: var(--c-text);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.12s, transform 0.06s;
+  border: 1px solid transparent;
+}
+.status-chip:hover { opacity: 0.85; }
+.status-chip:active { transform: scale(0.97); }
+.status-chip input[type="checkbox"] {
+  /* 用 :has() 让勾选状态影响 chip 外观 */
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--c-text);
+}
+.status-chip:not(:has(input:checked)) {
+  opacity: 0.35;
+  background: transparent;
+  text-decoration: line-through;
+  color: var(--c-text-muted);
+}
+.status-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+/* 每个 chip 的颜色（与状态徽章一致） */
+.status-chip--ordered { background: #cffafe; color: #0e7490; }
+.status-chip--making { background: #e0e7ff; color: #4338ca; }
+.status-chip--client-review { background: #ede9fe; color: #6d28d9; }
+.status-chip--rework { background: #ffedd5; color: #c2410c; }
+.status-chip--waiting-aab { background: #fef3c7; color: #b45309; }
+.status-chip--waiting-submit { background: #fef9c3; color: #a16207; }
+.status-chip--submitting { background: #cffafe; color: #0e7490; }
+.status-chip--first-passed { background: #ecfccb; color: #4d7c0f; }
+.status-chip--first-rejected { background: #ffe4e6; color: #be123c; }
+.status-chip--second-review { background: #fce7f3; color: #be185d; }
+.status-chip--remaking { background: #fee2e2; color: #b91c1c; }
+.status-chip--published { background: #d1fae5; color: #047857; }
+.status-chip--paid { background: #dcfce7; color: #15803d; }
+.status-chip--unpaid { background: #fee2e2; color: #b91c1c; }
+.status-chip--off-shelf { background: #e2e8f0; color: #334155; }
+.status-chip--unknown { background: #f4f4f5; color: #3f3f46; }
 
 .overview-table { width: 100%; border-collapse: collapse; }
 .overview-table thead th {
