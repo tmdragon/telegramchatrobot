@@ -96,13 +96,14 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if p is None:
         await _reply(update, f"❓ 未找到项目 `{pid}`")
         return
+    from src.bot.templates import status_display_text
     from src.web.filters import humanize_duration
 
     dwell = 0
     if p.status_changed_at:
         from datetime import datetime, timezone
         dwell = max(0, int((datetime.now(timezone.utc) - p.status_changed_at).total_seconds()))
-    status_text = p.status.value if p.status else "未知"
+    status_text = status_display_text(p) or "未知"
     name_text = p.project_name or "（未命名）"
     await _reply(
         update,
@@ -134,8 +135,9 @@ async def projects_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _reply(update, "本群暂无关联项目。" if not privileged else "暂无项目。")
         return
     lines = [title]
+    from src.bot.templates import status_display_text
     for s in summaries:
-        status_text = s.status.value if s.status else "未知"
+        status_text = status_display_text(s) or "未知"
         lines.append(f"• `{s.project_id}` — `{status_text}`")
     await _reply(update, "\n".join(lines))
 

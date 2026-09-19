@@ -30,6 +30,7 @@ class ProjectSummary:
     sheets: list[SheetView]
     editable_fields: int
     locked_field_names: list[str]
+    status_raw: Optional[str] = None  # sheet 状态列原文本
 
 
 class ProjectCache:
@@ -108,6 +109,7 @@ class ProjectCache:
                 project_id=p.project_id,
                 project_name=p.project_name,
                 status=p.status,
+                status_raw=p.status_raw,
                 status_changed_at=p.status_changed_at,
                 dwell_seconds=dwell,
                 sheets=p.sheets,

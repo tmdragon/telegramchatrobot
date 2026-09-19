@@ -61,15 +61,20 @@ STATUS_DISPLAY_CN: dict[StatusCode, str] = {
 }
 
 
+def status_display_text(project: Project) -> str:
+    """返回项目状态的展示文本：sheet 原文本 → STATUS_DISPLAY_CN → 状态码本身。"""
+    if project.status_raw:
+        return project.status_raw
+    if project.status is not None:
+        return STATUS_DISPLAY_CN.get(project.status, project.status.value)
+    return ""
+
+
 def _format_status_line(project: Project, now: datetime) -> str:
     if project.status is None and not project.status_raw:
         return "▸ 当前状态：未知"
     emoji = STATUS_EMOJI.get(project.status, "⚪") if project.status else "⚪"
-    # 优先用 sheet 原文本；fallback 到 STATUS_DISPLAY_CN
-    if project.status_raw:
-        text = project.status_raw
-    else:
-        text = STATUS_DISPLAY_CN.get(project.status, project.status.value)
+    text = status_display_text(project) or (project.status.value if project.status else "未知")
     dwell = 0
     if project.status_changed_at and project.status:
         dwell = max(0, int((now - project.status_changed_at).total_seconds()))
