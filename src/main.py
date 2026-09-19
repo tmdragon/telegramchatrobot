@@ -72,24 +72,51 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         print(f"[warn] mapping load skipped: {e}")
 
-    # ========== Phase 2: 启动 FastUI ==========
+    # ========== Phase 2 + Phase 3: 启动 FastUI + Bot + Scheduler ==========
     # 把所有 deps 注入到 FastAPI app
     from src.web.app import create_app
     from src.web.cache import ProjectCache
     from src.web.refresher import BackgroundRefresher
+    from src.bot.service import BotService
+    from src.bot.broadcast import BroadcastSvc
+    from src.scheduler.config import load_scheduler_config
+    from src.scheduler.jobs import build_scheduler
 
     cache = ProjectCache()
+    bot_service = BotService()
+    scheduler_cfg_path = Path("config/scheduler.yaml")
+    # 缺 scheduler.yaml 时回退默认配置（BroadcastConfig 自带 times/weekdays_only 默认）
+    try:
+        scheduler_cfg = load_scheduler_config(scheduler_cfg_path)
+    except FileNotFoundError:
+        from src.scheduler.config import BroadcastConfig
+        scheduler_cfg = BroadcastConfig()
+    broadcast_svc = BroadcastSvc(
+        bot_service=bot_service,
+        mapping_repo=mapping_repo,
+        store=store,
+        cache=cache,
+        admin_chat_id=int(cfg.admin_chat_id),
+        per_status_thresholds=scheduler_cfg.per_status_thresholds,
+    )
+    scheduler = build_scheduler(broadcast_svc, scheduler_cfg)
+
     app = create_app(
         cfg=cfg,
         store=store,
         sheet_repo=repo,
         mapping_repo=mapping_repo,
-        bot_service=None,  # Phase 3 接入 BotService
+        bot_service=bot_service,
+        scheduler=scheduler,
+        admin_chat_id=int(cfg.admin_chat_id),
     )
     app.state.cache = cache
+    app.state.broadcast_svc = broadcast_svc
     app.state.refresher = BackgroundRefresher(repo, mapping_repo, store, cfg, cache)
 
     print(f"[ui] Listening on http://{cfg.ui_bind}:{cfg.ui_port}")
+    print(f"[bot] token={cfg.telegram_bot_token[:6]}... admin={cfg.admin_chat_id}")
+    print(f"[scheduler] {len(scheduler_cfg.times)} cron jobs, weekdays_only={scheduler_cfg.weekdays_only}")
 
     # 单线程 uvicorn（避免 SQLite 并发问题；gspread 已通过 asyncio.to_thread 异步化）
     uvicorn.run(
