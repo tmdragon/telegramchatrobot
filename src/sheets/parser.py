@@ -13,7 +13,7 @@ from src.models.status import StatusCode, normalize
 PROJECT_ID_CANDIDATES = ["项目编号", "编号", "ID", "Project ID", "项目 ID", "project_id"]
 STATUS_CANDIDATES = ["状态", "当前状态", "项目状态", "Status", "status"]
 PROJECT_NAME_CANDIDATES = ["项目名", "项目名称", "Name", "name"]
-PACKAGE_NAME_CANDIDATES = ["包名", "参数", "Package", "package", "Package Name", "package_name"]
+PACKAGE_NAME_CANDIDATES = ["包名", "Package", "package", "Package Name", "package_name"]
 
 
 class HeaderDetector:

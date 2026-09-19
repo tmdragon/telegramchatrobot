@@ -277,7 +277,7 @@ async def test_projects_cmd_includes_package_name():
     # 直接塞进 ProjectCache（绕过 list_summaries）
     cache._projects["PAK-001"] = Project(
         project_id="PAK-001", project_name="项目一",
-        package_name="ccv0(HTTPADJUST)",
+        package_name="com.example.pkg1",
         status=StatusCode.MAKING, status_changed_at=None, sheets=[],
     )
     mapping_repo = MagicMock()
@@ -296,7 +296,7 @@ async def test_projects_cmd_includes_package_name():
     await projects_cmd(u, c)
     text = u.message.reply_text.await_args.args[0]
     assert "PAK-001" in text
-    assert "ccv0(HTTPADJUST)" in text
+    assert "com.example.pkg1" in text
 
 
 # ---------- admin gates ----------
