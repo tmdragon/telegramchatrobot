@@ -20,6 +20,8 @@ h1, h2, h3 { margin: 0 0 0.5em; }
 .status-badge--waiting-aab .status-badge__dot, .status-badge--waiting-submit .status-badge__dot, .status-badge--submitting .status-badge__dot, .status-badge--first-passed .status-badge__dot, .status-badge--second-review .status-badge__dot { background: #d4a72c; }
 .status-badge--first-rejected .status-badge__dot, .status-badge--unpaid .status-badge__dot { background: #cf222e; }
 .status-badge--published .status-badge__dot, .status-badge--paid .status-badge__dot { background: #1a7f37; }
+.status-badge--off-shelf .status-badge__dot { background: #6e7781; }
+.status-badge--off-shelf { background: #eaeef2; color: #57606a; }
 .status-badge--unknown .status-badge__dot { background: #8c959f; }
 
 /* ===== Error Banner ===== */

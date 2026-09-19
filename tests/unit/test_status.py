@@ -1,8 +1,15 @@
 from src.models.status import StatusCode, normalize, ALIASES
 
 
-def test_aliases_has_14_entries():
-    assert len(ALIASES) == 14
+def test_aliases_has_15_entries():
+    assert len(ALIASES) == 15
+
+
+def test_off_shelf_aliases():
+    assert normalize("已下架") == StatusCode.OFF_SHELF
+    assert normalize("下架") == StatusCode.OFF_SHELF
+    assert normalize("已下线") == StatusCode.OFF_SHELF
+    assert normalize("OFF_SHELF") == StatusCode.OFF_SHELF
 
 
 def test_normalize_exact_code():

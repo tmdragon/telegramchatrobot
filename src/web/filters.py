@@ -30,6 +30,7 @@ STATUS_DISPLAY: dict[StatusCode, tuple[str, str]] = {
     StatusCode.PUBLISHED:            ("published",      "已发布"),
     StatusCode.PAID:                 ("paid",           "对方已回款"),
     StatusCode.UNPAID:               ("unpaid",         "对方未回款"),
+    StatusCode.OFF_SHELF:            ("off-shelf",      "已下架"),
 }
 
 
