@@ -156,7 +156,7 @@ async def trigger_store_check_now(
             await asyncio.to_thread(
                 refresher.sheet_repo.update_cell_by_header,
                 spreadsheet_id=refresher.cfg.spreadsheets[0].id,
-                sheet_name=refresher.cfg.spreadsheets[0].name,
+                worksheet_name=refresher.cfg.spreadsheets[0].name,
                 row=row,
                 header_name="状态",
                 new_value="已上架",
@@ -275,7 +275,7 @@ async def _store_monitor_wrapper(
                 await asyncio.to_thread(
                     refresher.sheet_repo.update_cell_by_header,
                     spreadsheet_id=refresher.cfg.spreadsheets[0].id,
-                    sheet_name=refresher.cfg.spreadsheets[0].name,
+                    worksheet_name=refresher.cfg.spreadsheets[0].name,
                     row=row,
                     header_name="状态",
                     new_value="已上架",
