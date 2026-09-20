@@ -55,9 +55,12 @@ async def check_app_published(
           "published": bool,
           "title": str | None,       # 提取的 app 标题
           "status_code": int,
-          "reason": str,             # "published" | "not_found" | "error: ..."
+          "reason": str,             # "published" | "not_found" | "ambiguous" | "timeout" | "error: ..."
           "url_final": str,          # 实际访问的 URL（处理 redirect 后）
         }
+
+    注意：HTTP 状态码不可靠（Google 对 bot UA 会返回 404 而 body 仍是 app 内容）。
+    必须 parse body：找到 install 按钮 / app 标题 → 上架；找到 "Item not found" → 未上架。
     """
     if not url:
         return {"published": False, "title": None, "status_code": 0,
@@ -90,18 +93,7 @@ async def check_app_published(
         return {"published": False, "title": None, "status_code": 0,
                 "reason": f"error: {type(e).__name__}: {e}", "url_final": url}
 
-    # HTTP 4xx/5xx：未上架或服务异常
-    if status >= 400:
-        return {"published": False, "title": None, "status_code": status,
-                "reason": f"http_{status}", "url_final": url_final}
-
-    # 检查未上架关键词
-    for indicator in _INDICATORS_NOT_FOUND:
-        if indicator in html:
-            return {"published": False, "title": None, "status_code": status,
-                    "reason": "not_found", "url_final": url_final}
-
-    # 提取 app 标题
+    # 提取 app 标题（不管 status 都提取，因为 Google 对 bot 可能 200 + 真内容 或 404 + 假内容）
     m = _TITLE_RE.search(html)
     title = m.group(1).strip() if m else None
     if title is None:
@@ -109,12 +101,28 @@ async def check_app_published(
         if m2:
             title = m2.group(1).strip()
 
-    # 检查已上架标志
+    # 检查未上架关键词（body 里出现这些 → 明确未上架）
+    for indicator in _INDICATORS_NOT_FOUND:
+        if indicator in html:
+            return {"published": False, "title": title, "status_code": status,
+                    "reason": "not_found", "url_final": url_final}
+
+    # 检查已上架标志（install 按钮 / 截图 / 评分 等）
     has_install = any(ind in html for ind in _INDICATORS_PUBLISHED)
-    if has_install or title:
+    if has_install and title:
         return {"published": True, "title": title, "status_code": status,
                 "reason": "published", "url_final": url_final}
+    # 仅 install 标志，无标题（极少见）→ 视为上架
+    if has_install:
+        return {"published": True, "title": title, "status_code": status,
+                "reason": "published_no_title", "url_final": url_final}
+    # 仅有标题（可能是 404 假页面）→ 看标题
+    if title:
+        # Google 404 假页面通常不含 app 标题或含 "not found"
+        # 真已上架页面标题是 app 名
+        return {"published": True, "title": title, "status_code": status,
+                "reason": "title_only", "url_final": url_final}
 
-    # 兜底：HTTP 200 但未识别 → 标记为 pending 让下次重试
+    # 既无 install 标志也无标题 → 兜底 pending 让下次重试
     return {"published": False, "title": title, "status_code": status,
             "reason": "ambiguous", "url_final": url_final}
