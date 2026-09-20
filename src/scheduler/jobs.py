@@ -140,16 +140,54 @@ async def trigger_store_check_now(
     now = datetime.now(timezone.utc)
     proj.last_store_check_at = now
     proj.last_store_check_result = "published" if result["published"] else "pending"
-    if not result["published"]:
+
+    if result["published"]:
+        # 上架了！与定时任务同步：写 sheet + refresh + 提醒
+        try:
+            row = refresher._find_project_row(project_id)
+            if row is None:
+                await broadcast_svc.broadcast_internal_only_with_text(
+                    f"⚠ 商店上架监测: 找不到 {project_id} 在 sheet 中的行"
+                )
+                return {
+                    "ok": True, "published": True, "title": result.get("title"),
+                    "reason": result.get("reason"), "sheet_updated": False,
+                }
+            await asyncio.to_thread(
+                refresher.sheet_repo.update_cell_by_header,
+                spreadsheet_id=refresher.cfg.spreadsheets[0].id,
+                sheet_name=refresher.cfg.spreadsheets[0].name,
+                row=row,
+                header_name="状态",
+                new_value="已上架",
+            )
+            await refresher.refresh_now()
+            await broadcast_svc.broadcast_internal_only_with_text(
+                f"✅ 商店上架监测: {project_id} ({proj.project_name or '（未命名）'}) "
+                f"已从 {proj.status.value if proj.status else '?'} → PUBLISHED。"
+                f"检测到：{result.get('title') or '?'}"
+            )
+            return {
+                "ok": True, "published": True, "title": result.get("title"),
+                "reason": result.get("reason"), "sheet_updated": True,
+            }
+        except Exception as e:
+            await broadcast_svc.broadcast_internal_only_with_text(
+                f"⚠ 商店上架监测更新失败 {project_id}: {e}"
+            )
+            proj.last_store_check_result = "error"
+            return {
+                "ok": False, "published": True, "title": result.get("title"),
+                "reason": f"update_failed: {e}",
+            }
+    else:
         next_at = now + timedelta(seconds=broadcast_cfg.store_monitor_min_hours * 3600)
         proj.next_store_check_at = next_at
         refresher.store_check_schedule[project_id] = next_at
-    return {
-        "ok": True,
-        "published": result["published"],
-        "title": result.get("title"),
-        "reason": result.get("reason"),
-    }
+        return {
+            "ok": True, "published": False, "title": result.get("title"),
+            "reason": result.get("reason"),
+        }
 
 
 async def _stuck_status_broadcast_wrapper(
