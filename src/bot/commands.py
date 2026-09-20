@@ -106,6 +106,11 @@ async def _reply(update: Update, text: str) -> None:
     await update.message.reply_text(text, parse_mode="MarkdownV2")
 
 
+async def _reply_plain(update: Update, text: str) -> None:
+    """纯文本回复：用于含 MarkdownV2 保留字符（. ( ) 等）的帮助文档。"""
+    await update.message.reply_text(text)
+
+
 # ---------- handlers ----------
 
 async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -214,7 +219,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     admin_broadcast_chats = context.bot_data.get("admin_broadcast_chats") or []
     privileged = _is_privileged_chat(chat_id_str, admin_id, admin_broadcast_chats)
     # 客户群只看公开指令；管理员 / 内部群看完整指令
-    await _reply(update, HELP_ADMIN if privileged else HELP_PUBLIC)
+    # 用纯文本：含 MarkdownV2 保留字符（. ( ) : / 等）多
+    await _reply_plain(update, HELP_ADMIN if privileged else HELP_PUBLIC)
 
 
 async def chatid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

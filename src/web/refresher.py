@@ -111,6 +111,11 @@ class BackgroundRefresher:
         ]
 
         per_ss: list[dict[str, Any]] = []
+        # 提前初始化 catch-block 也会用到的变量（避免 UnboundLocalError）
+        project_count = 0
+        is_first_refresh = not self._initialized
+        changes: list[Project] = []
+
         # fetch_all 是同步阻塞 —— 必须 to_thread
         try:
             projects = await asyncio.to_thread(self.sheet_repo.fetch_all, targets)
@@ -120,8 +125,6 @@ class BackgroundRefresher:
             project_count = len(projects)
 
             # 计算状态变化（在替换 cache 与 _previous 之前）
-            is_first_refresh = not self._initialized
-            changes: list[Project] = []
             new_index = {p.project_id: p for p in projects}
             if not is_first_refresh:
                 for pid, new_p in new_index.items():
