@@ -162,6 +162,9 @@ async def trigger_store_check_now(
                 new_value="已上架",
             )
             await refresher.refresh_now()
+            # 触发 broadcast_project 让客户群立即收到"已上架"通知
+            # （refresh_now 本身不广播；这是 _refresh_and_broadcast_wrapper 的工作）
+            await broadcast_svc.broadcast_project(proj)
             await broadcast_svc.broadcast_internal_only_with_text(
                 f"✅ 商店上架监测: {project_id} ({proj.project_name or '（未命名）'}) "
                 f"已从 {proj.status.value if proj.status else '?'} → PUBLISHED。"
