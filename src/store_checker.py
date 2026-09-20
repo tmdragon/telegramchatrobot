@@ -33,9 +33,14 @@ _INDICATORS_NOT_FOUND = [
     "此应用在您所在的国家/地区不可用",
 ]
 
-# 提取 app 标题（<h1 itemprop="name"> ... </h1> 或 <title>...</title>）
-_TITLE_RE = re.compile(r'<h1[^>]*itemprop="name"[^>]*>([^<]+)</h1>', re.IGNORECASE)
+# 提取 app 标题
+# Google Play 真实结构：<h1><span itemprop="name">House Raise Up</span></h1>
+# 宽松匹配：itemprop="name"> 后面的文本（不限于在 h1 里）
+_TITLE_RE = re.compile(r'itemprop="name"[^>]*>([^<]+?)<', re.IGNORECASE)
+# 兜底：<title>App Name - Apps on Google Play</title>
 _PAGE_TITLE_RE = re.compile(r'<title>([^<]+?) - Apps on Google Play</title>', re.IGNORECASE)
+# 辅助：找 h1 标签（即使空）
+_H1_RE = re.compile(r'<h1[^>]*>', re.IGNORECASE)
 
 
 async def check_app_published(
@@ -94,12 +99,14 @@ async def check_app_published(
                 "reason": f"error: {type(e).__name__}: {e}", "url_final": url}
 
     # 提取 app 标题（不管 status 都提取，因为 Google 对 bot 可能 200 + 真内容 或 404 + 假内容）
-    m = _TITLE_RE.search(html)
-    title = m.group(1).strip() if m else None
-    if title is None:
-        m2 = _PAGE_TITLE_RE.search(html)
-        if m2:
-            title = m2.group(1).strip()
+    # 优先：<title>X - Apps on Google Play</title>
+    m2 = _PAGE_TITLE_RE.search(html)
+    if m2:
+        title = m2.group(1).strip()
+    else:
+        # 兜底：itemprop="name">X<（任意位置）
+        m = _TITLE_RE.search(html)
+        title = m.group(1).strip() if m else None
 
     # 检查未上架关键词（body 里出现这些 → 明确未上架）
     for indicator in _INDICATORS_NOT_FOUND:
@@ -116,10 +123,8 @@ async def check_app_published(
     if has_install:
         return {"published": True, "title": title, "status_code": status,
                 "reason": "published_no_title", "url_final": url_final}
-    # 仅有标题（可能是 404 假页面）→ 看标题
+    # 仅有标题（最常见：Google 404 假页面通常不含 "Item not found"，但 <title> 仍可能匹配）
     if title:
-        # Google 404 假页面通常不含 app 标题或含 "not found"
-        # 真已上架页面标题是 app 名
         return {"published": True, "title": title, "status_code": status,
                 "reason": "title_only", "url_final": url_final}
 
