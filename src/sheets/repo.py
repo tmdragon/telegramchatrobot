@@ -17,6 +17,7 @@ from src.config import SpreadsheetConfig
 from src.models.project import Field, Project, SheetView
 from src.sheets.parser import (
     HeaderDetector,
+    LAUNCH_REGION_CANDIDATES,
     PACKAGE_NAME_CANDIDATES,
     PAYMENT_CANDIDATES,
     PROJECT_ID_CANDIDATES,
@@ -52,6 +53,7 @@ class SheetRepo:
             pkg_col = detector.find_column(PACKAGE_NAME_CANDIDATES)
             pay_col = detector.find_column(PAYMENT_CANDIDATES)
             store_col = detector.find_column(STORE_URL_CANDIDATES)
+            region_col = detector.find_column(LAUNCH_REGION_CANDIDATES)
 
             if pid_col is None:
                 continue  # 此表无项目编号列，跳过
@@ -80,6 +82,8 @@ class SheetRepo:
                         recognized = "payment_status"
                     elif store_col is not None and col_idx == store_col:
                         recognized = "store_url"
+                    elif region_col is not None and col_idx == region_col:
+                        recognized = "launch_region"
                     fields.append(Field(
                         name=header,
                         value=value,
@@ -109,6 +113,9 @@ class SheetRepo:
                 # 商店地址（GP/App Store URL）
                 store_url = row[store_col - 1].strip() if store_col and store_col <= len(row) else None
                 store_url = store_url or None
+                # 上架地区
+                launch_region = row[region_col - 1].strip() if region_col and region_col <= len(row) else None
+                launch_region = launch_region or None
 
                 if pid not in projects_by_id:
                     projects_by_id[pid] = Project(
@@ -116,6 +123,7 @@ class SheetRepo:
                         project_name=name,
                         package_name=pkg_name,
                         store_url=store_url,
+                        launch_region=launch_region,
                         status=status,
                         status_raw=status_raw,
                         status_changed_at=fetched_at,  # 首次见到该状态的时间
@@ -132,6 +140,8 @@ class SheetRepo:
                         p.package_name = pkg_name
                     if store_url and not p.store_url:
                         p.store_url = store_url
+                    if launch_region and not p.launch_region:
+                        p.launch_region = launch_region
                     # 支付状态首次见到时写入；后续 sheet 可更新
                     if payment is not None:
                         if p.payment_status != payment:
