@@ -137,6 +137,9 @@
                 data-package="{{ s.package_name or '' }}"
                 data-name="{{ s.project_name or '' }}"
                 data-payment="{{ s.payment_status.value if s.payment_status else 'NONE' }}">
+              <td data-store-status="{{ s.last_store_check_result or '' }}"
+                  data-store-next="{{ s.next_store_check_at.isoformat() if s.next_store_check_at else '' }}"
+                  data-store-url="{{ s.store_url or '' }}">
               <td>
                 <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
               </td>
@@ -179,5 +182,58 @@
 <script type="module">
   // 由 overview-filter.js 暴露的 start()；page-bootstrap 加载顺序确保其在后
   import("/static/js/overview-filter.js").then((m) => m.start());
+</script>
+<script>
+  // 商店监测状态徽章：根据 data-store-status / data-store-next 渲染小标签
+  (function () {
+    function fmt(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    function badge(status) {
+      switch (status) {
+        case "published": return { label: "已上架 ✓", cls: "store-badge--ok" };
+        case "pending":   return { label: "审核中…",  cls: "store-badge--wait" };
+        case "error":     return { label: "监测异常",   cls: "store-badge--err" };
+        default:          return null;
+      }
+    }
+    document.querySelectorAll("#overview-table .overview-row").forEach((tr) => {
+      const cell = tr.querySelector("td[data-store-status]");
+      if (!cell) return;
+      const status = cell.dataset.storeStatus || "";
+      const nextIso = cell.dataset.storeNext || "";
+      const url = cell.dataset.storeUrl || "";
+      const b = badge(status);
+      if (!b && !url) return; // 既无状态又无 URL：不显示徽章
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "margin-top:2px;display:flex;gap:4px;flex-wrap:wrap;";
+      if (b) {
+        const tag = document.createElement("span");
+        tag.className = `store-badge ${b.cls}`;
+        tag.textContent = b.label;
+        wrap.appendChild(tag);
+      }
+      if (nextIso) {
+        const t = document.createElement("span");
+        t.className = "store-badge store-badge--next";
+        t.textContent = `下次 ${fmt(nextIso)}`;
+        wrap.appendChild(t);
+      }
+      if (url && b && b.cls === "store-badge--wait") {
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "商店链接";
+        a.style.cssText = "font-size:11px;color:var(--c-primary);";
+        wrap.appendChild(a);
+      }
+      cell.appendChild(wrap);
+    });
+  })();
 </script>
 {% endblock %}

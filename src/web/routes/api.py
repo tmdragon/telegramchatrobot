@@ -146,6 +146,26 @@ async def get_project_detail(request: Request, project_id: str):
     }
 
 
+@router.post("/projects/{project_id}/check-store")
+async def post_check_store(request: Request, project_id: str):
+    """手动触发单个项目的商店上架检查（忽略时间间隔，立刻查）。"""
+    app = request.app
+    refresher = getattr(app.state, "refresher", None)
+    broadcast_svc = getattr(app.state, "broadcast_svc", None)
+    scheduler_cfg = getattr(app.state, "scheduler_cfg", None)
+    if refresher is None or broadcast_svc is None or scheduler_cfg is None:
+        raise HTTPException(status_code=503, detail="store monitor not initialized")
+    from src.scheduler.jobs import trigger_store_check_now
+    result = await trigger_store_check_now(
+        refresher, broadcast_svc, scheduler_cfg, project_id
+    )
+    if not result.get("ok"):
+        reason = result.get("reason", "unknown")
+        status = 404 if reason == "not_found" else 400
+        raise HTTPException(status_code=status, detail=reason)
+    return result
+
+
 @router.put("/projects/{project_id}/fields/{field_id}")
 async def put_field(request: Request, project_id: str, field_id: str, body: FieldEditBody):
     """字段编辑流程：decode field_id → 校验 → asyncio.to_thread(update_cell) → 更新 cache。

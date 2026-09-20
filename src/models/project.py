@@ -38,6 +38,7 @@ class Project:
     package_name: Optional[str] = None  # sheet "包名/参数" 列原文
     store_url: Optional[str] = None  # sheet "商店地址/开关服地址" 列原文（GP/App Store URL）
     launch_region: Optional[str] = None  # sheet "上架地区" 列原文（项目计划上架的国家/地区）
+    launch_region_code: Optional[str] = None  # 归一化后的 ISO 3166-1 alpha-2 code（如 US/JP）
     status: Optional[StatusCode] = None
     status_raw: Optional[str] = None  # sheet 状态列的原文本（normalize 之前的字符串）
     status_changed_at: Optional[datetime] = None
@@ -47,6 +48,10 @@ class Project:
     payment_changed_at: Optional[datetime] = None
     status_history: list[tuple[StatusCode, datetime]] = field(default_factory=list)
     sheets: list[SheetView] = field(default_factory=list)
+    # 商店监测（Phase 3 SECOND_REVIEW 自动上架检测）
+    next_store_check_at: Optional[datetime] = None
+    last_store_check_at: Optional[datetime] = None
+    last_store_check_result: Optional[str] = None  # 'published' | 'not_found' | 'pending' | 'error'
 
 
 @dataclass

@@ -37,6 +37,13 @@ class ProjectSummary:
     package_name: Optional[str] = None  # sheet 包名/参数 列原文
     payment_status: Optional["PaymentStatus"] = None  # 独立支付状态
     payment_raw: Optional[str] = None  # sheet 回款/支付 列原文
+    # 商店监测（Phase 3 SECOND_REVIEW 自动上架检测）
+    launch_region: Optional[str] = None  # sheet 原文本
+    launch_region_code: Optional[str] = None  # ISO code
+    store_url: Optional[str] = None
+    next_store_check_at: Optional[datetime] = None
+    last_store_check_at: Optional[datetime] = None
+    last_store_check_result: Optional[str] = None
 
 
 class ProjectCache:
@@ -124,5 +131,11 @@ class ProjectCache:
                 package_name=p.package_name,
                 payment_status=p.payment_status,
                 payment_raw=p.payment_raw,
+                launch_region=p.launch_region,
+                launch_region_code=p.launch_region_code,
+                store_url=p.store_url,
+                next_store_check_at=p.next_store_check_at,
+                last_store_check_at=p.last_store_check_at,
+                last_store_check_result=p.last_store_check_result,
             ))
         return out

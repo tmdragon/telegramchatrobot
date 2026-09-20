@@ -128,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     app.state.cache = cache
     app.state.broadcast_svc = broadcast_svc
     app.state.refresher = refresher  # 复用 scheduler 用的同一个实例
+    app.state.scheduler_cfg = scheduler_cfg  # 商店监测手动触发用
 
     print(f"[ui] Listening on http://{cfg.ui_bind}:{cfg.ui_port}")
     print(f"[bot] token={cfg.telegram_bot_token[:6]}... admin={cfg.admin_chat_id}")

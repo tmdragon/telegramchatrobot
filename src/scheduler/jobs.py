@@ -119,6 +119,39 @@ async def _broadcast_job_wrapper(
     )
 
 
+async def trigger_store_check_now(
+    refresher: BackgroundRefresher,
+    broadcast_svc: BroadcastSvc,
+    broadcast_cfg: BroadcastConfig,
+    project_id: str,
+) -> dict:
+    """手动触发单个项目的商店检查（忽略时间间隔）。"""
+    cache = refresher.cache
+    if cache is None:
+        return {"ok": False, "reason": "no_cache"}
+    proj = cache.get(project_id)
+    if proj is None:
+        return {"ok": False, "reason": "not_found"}
+    if not proj.store_url:
+        return {"ok": False, "reason": "no_store_url"}
+    result = await check_app_published(
+        proj.store_url, proxy=broadcast_cfg.store_monitor_proxy_url or None
+    )
+    now = datetime.now(timezone.utc)
+    proj.last_store_check_at = now
+    proj.last_store_check_result = "published" if result["published"] else "pending"
+    if not result["published"]:
+        next_at = now + timedelta(seconds=broadcast_cfg.store_monitor_min_hours * 3600)
+        proj.next_store_check_at = next_at
+        refresher.store_check_schedule[project_id] = next_at
+    return {
+        "ok": True,
+        "published": result["published"],
+        "title": result.get("title"),
+        "reason": result.get("reason"),
+    }
+
+
 async def _stuck_status_broadcast_wrapper(
     broadcast_svc: BroadcastSvc,
     broadcast_cfg: BroadcastConfig,
@@ -166,6 +199,7 @@ async def _store_monitor_wrapper(
     - 距上次检查 ≥ min_hours 才查（避免轰炸）
     - 未上架则下次随机 min~max 小时后查
     - 已上架 → 调 SheetRepo.update_cell 改 sheet 状态为 "已上架" → 触发下次 refresh → 自动播报
+    - 检查结果写入 Project.next_store_check_at / last_store_check_at / last_store_check_result（UI 显示）
     """
     cache = refresher.cache
     if cache is None:
@@ -180,43 +214,48 @@ async def _store_monitor_wrapper(
             continue
         if not project.store_url:
             continue
-        # 距上次检查是否够久
-        last_check = refresher.store_check_last.get(project.project_id)
-        if last_check is not None:
-            since_last = (now - last_check).total_seconds()
-            if since_last < min_seconds:
-                continue
+        # 距下次计划时间：now < next_check_at 则跳过
+        scheduled = refresher.store_check_schedule.get(project.project_id)
+        if scheduled is not None and now < scheduled:
+            project.next_store_check_at = scheduled
+            continue
         # 实际检查
         result = await check_app_published(
             project.store_url, proxy=broadcast_cfg.store_monitor_proxy_url or None
         )
-        # 记录本次检查时间
-        refresher.store_check_last[project.project_id] = now
+        # 写入 Project 字段（UI 会读到）
+        project.last_store_check_at = now
+        project.last_store_check_result = "published" if result["published"] else "pending"
         if result["published"]:
-            # 上架了！更新 sheet 状态为 "已上架"
             try:
+                row = refresher._find_project_row(project.project_id)
+                if row is None:
+                    await broadcast_svc.broadcast_internal_only_with_text(
+                        f"⚠ 商店上架监测: 找不到 {project.project_id} 在 sheet 中的行"
+                    )
+                    continue
                 await asyncio.to_thread(
                     refresher.sheet_repo.update_cell_by_header,
                     spreadsheet_id=refresher.cfg.spreadsheets[0].id,
                     sheet_name=refresher.cfg.spreadsheets[0].name,
-                    row=refresher._find_project_row(project.project_id),
+                    row=row,
                     header_name="状态",
                     new_value="已上架",
                 )
                 # 触发 refresh 让 cache 立即同步
                 await refresher.refresh_now()
-                # 给管理员发个提示
                 await broadcast_svc.broadcast_internal_only_with_text(
                     f"✅ 商店上架监测: {project.project_id} ({project.project_name or '（未命名）'}) "
-                    f"已从 SECOND_REVIEW 变更为 PUBLISHED。\n检测到：{result.get('title') or '?'}"
+                    f"已从 SECOND_REVIEW → PUBLISHED。检测到：{result.get('title') or '?'}"
                 )
             except Exception as e:  # noqa: BLE001
                 await broadcast_svc.broadcast_internal_only_with_text(
                     f"⚠ 商店上架监测更新失败 {project.project_id}: {e}"
                 )
+                project.last_store_check_result = "error"
         else:
-            # 未上架，下一次随机 4-8h 后查
+            # 未上架：随机 4-8h 后下次查
             wait_seconds = random.uniform(min_seconds, max_seconds)
-            refresher.store_check_last[project.project_id] = now + timedelta(
-                seconds=wait_seconds
-            )
+            next_at = now + timedelta(seconds=wait_seconds)
+            project.next_store_check_at = next_at
+            refresher.store_check_schedule[project.project_id] = next_at

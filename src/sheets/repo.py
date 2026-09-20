@@ -141,7 +141,9 @@ class SheetRepo:
                     if store_url and not p.store_url:
                         p.store_url = store_url
                     if launch_region and not p.launch_region:
+                        from src.country import normalize_country
                         p.launch_region = launch_region
+                        p.launch_region_code = normalize_country(launch_region)
                     # 支付状态首次见到时写入；后续 sheet 可更新
                     if payment is not None:
                         if p.payment_status != payment:

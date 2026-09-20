@@ -556,6 +556,34 @@ a:hover { text-decoration: underline; }
   font-weight: 500;
 }
 
+/* ===== 商店监测徽章（项目管理页项目行内） ===== */
+.store-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: var(--r-pill);
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+.store-badge--ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+.store-badge--wait {
+  background: #fef9c3;
+  color: #a16207;
+}
+.store-badge--err {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.store-badge--next {
+  background: transparent;
+  color: var(--c-text-muted);
+  border: 1px dashed var(--c-border);
+}
+
 /* ===== Row modifiers (mappings) ===== */
 .row--warn { background: var(--c-warning-soft); }
 .row--error { background: var(--c-danger-soft); }
