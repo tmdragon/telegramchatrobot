@@ -38,6 +38,22 @@ class BackgroundRefresher:
         self._initialized = False
         # 商店监测：每个项目的 next_check_at（用于 UI 显示 / 决定是否到时间再查）
         self.store_check_schedule: dict[str, datetime] = {}
+        # Phase 3 商店监测缓存：上次检查结果（process 内）
+        self.last_check_result: dict[str, dict] = {}
+
+    def set_error_count(self, n: int) -> None:
+        self._error_count = n
+
+    def _find_project_row(self, project_id: str) -> Optional[int]:
+        """查找 project_id 在第一个配置的 sheet 中的行号（1-indexed）。"""
+        if not self.cfg.spreadsheets:
+            return None
+        ss = self.cfg.spreadsheets[0]
+        return self.sheet_repo.find_row_by_project_id(
+            spreadsheet_id=ss.id,
+            worksheet_name=ss.name,
+            project_id=project_id,
+        )
 
     def _hydrate_status_changed_at(self, projects: list[Project]) -> None:
         """用持久化的 project_state 覆盖 Project.status_changed_at / payment_changed_at。
