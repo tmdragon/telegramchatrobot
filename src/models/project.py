@@ -36,6 +36,7 @@ class Project:
     project_id: str
     project_name: Optional[str] = None
     package_name: Optional[str] = None  # sheet "包名/参数" 列原文
+    store_url: Optional[str] = None  # sheet "商店地址/开关服地址" 列原文（GP/App Store URL）
     status: Optional[StatusCode] = None
     status_raw: Optional[str] = None  # sheet 状态列的原文本（normalize 之前的字符串）
     status_changed_at: Optional[datetime] = None

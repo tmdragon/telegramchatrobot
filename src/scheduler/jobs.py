@@ -3,10 +3,16 @@
 build_scheduler：根据 broadcast_cfg.refresh_interval_minutes 切换模式：
 - >0：事件驱动（interval 触发 refresh + 状态变化即播）
 - =0：旧模式（cron 定时全员 broadcast_all）
+
+无论哪种模式，都会注册：
+- 滞留阈值播报：status 超过 N 小时在内部群提醒（按 stuck_status_hours 配置）
+- 商店上架监测：SECOND_REVIEW > 24h 后定时访问商店地址，发现上架即更新 sheet
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import asyncio
+import random
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -14,6 +20,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bot.broadcast import BroadcastSvc
 from src.scheduler.config import BroadcastConfig
+from src.store_checker import check_app_published
+from src.web.cache import ProjectCache
 from src.web.refresher import BackgroundRefresher
 
 
@@ -27,17 +35,10 @@ def build_scheduler(
     broadcast_cfg: BroadcastConfig,
     refresher: BackgroundRefresher | None = None,
 ) -> AsyncIOScheduler:
-    """构造并配置 AsyncIOScheduler。
-
-    Args:
-        broadcast_svc: 播报服务
-        broadcast_cfg: 调度配置
-        refresher: 事件驱动模式必传；用于每 N 分钟拉一次 sheet 并检测变化
-    """
+    """构造并配置 AsyncIOScheduler。"""
     scheduler = AsyncIOScheduler()
 
     if broadcast_cfg.refresh_interval_minutes > 0:
-        # 事件驱动：每 N 分钟 refresh → 检测变化 → 立即播报
         if refresher is None:
             raise ValueError(
                 "refresh_interval_minutes > 0 requires a BackgroundRefresher"
@@ -52,7 +53,6 @@ def build_scheduler(
             coalesce=True,
         )
     else:
-        # 旧模式：cron 定时全员 broadcast_all（保留作为可选 fallback）
         for t in broadcast_cfg.times:
             hour, minute = _parse_hhmm(t)
             trigger = CronTrigger(hour=hour, minute=minute, timezone="UTC")
@@ -65,6 +65,31 @@ def build_scheduler(
                 max_instances=1,
                 coalesce=True,
             )
+
+    # === 滞留阈值播报：每 30 分钟扫一次 ===
+    if broadcast_cfg.stuck_status_hours:
+        scheduler.add_job(
+            _stuck_status_broadcast_wrapper,
+            trigger=IntervalTrigger(minutes=30),
+            args=(broadcast_svc, broadcast_cfg, refresher.cache if refresher else None),
+            id="stuck-status-broadcast",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
+    # === 商店上架监测：每 N 分钟扫一次 SECOND_REVIEW 项目 ===
+    if broadcast_cfg.store_monitor_interval_minutes > 0 and refresher is not None:
+        scheduler.add_job(
+            _store_monitor_wrapper,
+            trigger=IntervalTrigger(minutes=broadcast_cfg.store_monitor_interval_minutes),
+            args=(refresher, broadcast_svc, broadcast_cfg),
+            id="store-monitor",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
     return scheduler
 
 
@@ -78,7 +103,6 @@ async def _refresh_and_broadcast_wrapper(
         try:
             await broadcast_svc.broadcast_project(project)
         except Exception:  # noqa: BLE001
-            # 单项目失败不影响整体循环；下个项目继续
             pass
 
 
@@ -93,3 +117,106 @@ async def _broadcast_job_wrapper(
         skip_if_no_change=broadcast_cfg.skip_if_no_change,
         dryrun=False,
     )
+
+
+async def _stuck_status_broadcast_wrapper(
+    broadcast_svc: BroadcastSvc,
+    broadcast_cfg: BroadcastConfig,
+    cache: ProjectCache | None,
+) -> None:
+    """滞留阈值播报：超过 stuck_status_hours 设定的小时数 → 在内部群提醒。
+
+    - CLIENT_REVIEW：内部群 + 项目映射群都发
+    - 其他状态（MAKING / WAITING_SUBMIT 等）：只发内部群
+    """
+    if cache is None:
+        return
+    now = datetime.now(timezone.utc)
+    for project in cache.list_projects():
+        if project.status is None or project.status_changed_at is None:
+            continue
+        st_val = project.status.value
+        threshold_hours = broadcast_cfg.stuck_status_hours.get(st_val)
+        if not threshold_hours or threshold_hours <= 0:
+            continue
+        dwell = (now - project.status_changed_at).total_seconds() / 3600
+        if dwell < threshold_hours:
+            continue
+        # CLIENT_REVIEW 发到内部群 + 项目群；其他只发内部群
+        if project.status.value == "CLIENT_REVIEW":
+            try:
+                await broadcast_svc.broadcast_project(project)
+            except Exception:  # noqa: BLE001
+                pass
+        else:
+            try:
+                await broadcast_svc.broadcast_internal_only(project)
+            except Exception:  # noqa: BLE001
+                pass
+
+
+async def _store_monitor_wrapper(
+    refresher: BackgroundRefresher,
+    broadcast_svc: BroadcastSvc,
+    broadcast_cfg: BroadcastConfig,
+) -> None:
+    """商店上架监测：SECOND_REVIEW 状态的项目，定时访问 store_url 判断是否已上架。
+
+    - 每 N 分钟扫一次
+    - 距上次检查 ≥ min_hours 才查（避免轰炸）
+    - 未上架则下次随机 min~max 小时后查
+    - 已上架 → 调 SheetRepo.update_cell 改 sheet 状态为 "已上架" → 触发下次 refresh → 自动播报
+    """
+    cache = refresher.cache
+    if cache is None:
+        return
+
+    now = datetime.now(timezone.utc)
+    min_seconds = broadcast_cfg.store_monitor_min_hours * 3600
+    max_seconds = broadcast_cfg.store_monitor_max_hours * 3600
+
+    for project in cache.list_projects():
+        if project.status is None or project.status.value != "SECOND_REVIEW":
+            continue
+        if not project.store_url:
+            continue
+        # 距上次检查是否够久
+        last_check = refresher.store_check_last.get(project.project_id)
+        if last_check is not None:
+            since_last = (now - last_check).total_seconds()
+            if since_last < min_seconds:
+                continue
+        # 实际检查
+        result = await check_app_published(
+            project.store_url, proxy=broadcast_cfg.store_monitor_proxy_url or None
+        )
+        # 记录本次检查时间
+        refresher.store_check_last[project.project_id] = now
+        if result["published"]:
+            # 上架了！更新 sheet 状态为 "已上架"
+            try:
+                await asyncio.to_thread(
+                    refresher.sheet_repo.update_cell_by_header,
+                    spreadsheet_id=refresher.cfg.spreadsheets[0].id,
+                    sheet_name=refresher.cfg.spreadsheets[0].name,
+                    row=refresher._find_project_row(project.project_id),
+                    header_name="状态",
+                    new_value="已上架",
+                )
+                # 触发 refresh 让 cache 立即同步
+                await refresher.refresh_now()
+                # 给管理员发个提示
+                await broadcast_svc.broadcast_internal_only_with_text(
+                    f"✅ 商店上架监测: {project.project_id} ({project.project_name or '（未命名）'}) "
+                    f"已从 SECOND_REVIEW 变更为 PUBLISHED。\n检测到：{result.get('title') or '?'}"
+                )
+            except Exception as e:  # noqa: BLE001
+                await broadcast_svc.broadcast_internal_only_with_text(
+                    f"⚠ 商店上架监测更新失败 {project.project_id}: {e}"
+                )
+        else:
+            # 未上架，下一次随机 4-8h 后查
+            wait_seconds = random.uniform(min_seconds, max_seconds)
+            refresher.store_check_last[project.project_id] = now + timedelta(
+                seconds=wait_seconds
+            )

@@ -36,6 +36,8 @@ class BackgroundRefresher:
         # 状态变化检测：上次 refresh 后的 project 快照
         self._previous: dict[str, Project] = {}
         self._initialized = False
+        # 商店监测：每个项目上次检查时间（用于决定是否到时间再查）
+        self.store_check_last: dict[str, datetime] = {}
 
     def _hydrate_status_changed_at(self, projects: list[Project]) -> None:
         """用持久化的 project_state 覆盖 Project.status_changed_at / payment_changed_at。
@@ -65,6 +67,7 @@ class BackgroundRefresher:
                     )
                 else:
                     p.status_changed_at = prev[1]
+            # store_url 不变就不管（只有首次见到时持久化）
 
             # payment 维度（独立于 status）
             if p.payment_status is not None:

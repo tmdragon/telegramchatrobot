@@ -20,7 +20,7 @@ from typing import Optional
 
 from src.bot.service import BotService
 from src.bot.templates import render_broadcast, render_dryrun_preview
-from src.models.project import Mapping
+from src.models.project import Mapping, Project
 from src.sheets.mapping_repo import MappingRepo
 from src.store.db import Store
 from src.web.cache import ProjectCache
@@ -149,6 +149,46 @@ class BroadcastSvc:
             )
 
         return {"sent": sent, "skipped": 0, "failed": failed}
+
+    async def broadcast_internal_only(self, project: Project) -> dict:
+        """只发到内部管理群（admin_broadcast_chats），不发给项目映射群。
+
+        用途：滞留阈值播报等只提醒管理员/内部群、不打扰客户群的场景。
+        """
+        return await self.broadcast_internal_only_with_text(
+            self._render_internal_text(project)
+        )
+
+    async def broadcast_internal_only_with_text(self, text: str) -> dict:
+        """发任意文本到所有 admin_broadcast_chats（不重渲染模板）。"""
+        sent = 0
+        failed = 0
+        for ac in self.admin_broadcast_chats:
+            try:
+                ok = await self._send_with_retry(ac, text)
+                if ok:
+                    sent += 1
+                else:
+                    failed += 1
+            except Exception:  # noqa: BLE001
+                failed += 1
+        return {"sent": sent, "failed": failed, "skipped": 0}
+
+    def _render_internal_text(self, project: Project) -> str:
+        """渲染"滞留提醒"专用文案：包含项目 ID / 状态 / 停留时长。"""
+        from src.web.filters import humanize_duration
+        from src.bot.templates import status_display_text
+        now = datetime.now(timezone.utc)
+        dwell_seconds = 0
+        if project.status_changed_at:
+            dwell_seconds = max(0, int((now - project.status_changed_at).total_seconds()))
+        status_text = status_display_text(project) or "未知"
+        name = project.project_name or "（未命名）"
+        return (
+            f"⏰ *滞留提醒* — {project.project_id} {name}\n"
+            f"▸ 状态：`{status_text}`\n"
+            f"▸ 停留时长：`{humanize_duration(dwell_seconds)}`（超时未变）"
+        )
 
     async def broadcast_all(
         self,

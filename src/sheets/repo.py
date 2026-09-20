@@ -22,6 +22,7 @@ from src.sheets.parser import (
     PROJECT_ID_CANDIDATES,
     PROJECT_NAME_CANDIDATES,
     STATUS_CANDIDATES,
+    STORE_URL_CANDIDATES,
     parse_package_name,
     parse_payment_status,
     parse_project_id,
@@ -50,6 +51,7 @@ class SheetRepo:
             name_col = detector.find_column(PROJECT_NAME_CANDIDATES)
             pkg_col = detector.find_column(PACKAGE_NAME_CANDIDATES)
             pay_col = detector.find_column(PAYMENT_CANDIDATES)
+            store_col = detector.find_column(STORE_URL_CANDIDATES)
 
             if pid_col is None:
                 continue  # 此表无项目编号列，跳过
@@ -76,6 +78,8 @@ class SheetRepo:
                         recognized = "package_name"
                     elif pay_col is not None and col_idx == pay_col:
                         recognized = "payment_status"
+                    elif store_col is not None and col_idx == store_col:
+                        recognized = "store_url"
                     fields.append(Field(
                         name=header,
                         value=value,
@@ -102,12 +106,16 @@ class SheetRepo:
                 pay_raw = row[pay_col - 1].strip() if pay_col and pay_col <= len(row) else None
                 pay_raw = pay_raw or None
                 payment = parse_payment_status(pay_raw)
+                # 商店地址（GP/App Store URL）
+                store_url = row[store_col - 1].strip() if store_col and store_col <= len(row) else None
+                store_url = store_url or None
 
                 if pid not in projects_by_id:
                     projects_by_id[pid] = Project(
                         project_id=pid,
                         project_name=name,
                         package_name=pkg_name,
+                        store_url=store_url,
                         status=status,
                         status_raw=status_raw,
                         status_changed_at=fetched_at,  # 首次见到该状态的时间
@@ -122,6 +130,8 @@ class SheetRepo:
                         p.project_name = name
                     if pkg_name and not p.package_name:
                         p.package_name = pkg_name
+                    if store_url and not p.store_url:
+                        p.store_url = store_url
                     # 支付状态首次见到时写入；后续 sheet 可更新
                     if payment is not None:
                         if p.payment_status != payment:
@@ -165,6 +175,63 @@ class SheetRepo:
             raise WriteVerificationError(
                 f"Write verification failed at {spreadsheet_name}!{worksheet_name} "
                 f"({row},{col}): wrote {new_value!r}, read {verified!r}"
+            )
+        return verified
+
+    def find_row_by_project_id(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        project_id: str,
+    ) -> Optional[int]:
+        """根据 project_id 列查找项目所在行号（1-indexed）。找不到返回 None。
+
+        Phase 3 商店监测：检测到上架后用这个定位要 update_cell 的行。
+        """
+        sh = self.client.open_by_key(spreadsheet_id)
+        ws = sh.worksheet(worksheet_name)
+        rows = ws.get_all_values()
+        for idx, row in enumerate(rows[1:], start=2):
+            if row and row[0] == project_id:
+                return idx
+        return None
+
+    def find_column_by_header(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        header_name: str,
+    ) -> Optional[int]:
+        """根据 header_name 找列号（1-indexed）。"""
+        sh = self.client.open_by_key(spreadsheet_id)
+        ws = sh.worksheet(worksheet_name)
+        headers = ws.row_values(1)
+        for idx, h in enumerate(headers, start=1):
+            if h.strip() == header_name.strip():
+                return idx
+        return None
+
+    def update_cell_by_header(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        row: int,
+        header_name: str,
+        new_value: str,
+    ) -> str:
+        """按 header 名定位列 + 行号，写入并校验。"""
+        col = self.find_column_by_header(spreadsheet_id, worksheet_name, header_name)
+        if col is None:
+            raise ValueError(f"Header {header_name!r} not found in {worksheet_name}")
+        # 调用底层的 update_cell（用 spreadsheet_id 重新打开）
+        sh = self.client.open_by_key(spreadsheet_id)
+        ws = sh.worksheet(worksheet_name)
+        ws.update_cell(row, col, new_value)
+        verified = ws.cell(row, col).value
+        if verified != new_value:
+            raise WriteVerificationError(
+                f"Write verification failed at {worksheet_name} "
+                f"({row},{header_name}={col}): wrote {new_value!r}, read {verified!r}"
             )
         return verified
 
