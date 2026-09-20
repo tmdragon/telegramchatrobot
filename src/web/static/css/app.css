@@ -584,6 +584,40 @@ a:hover { text-decoration: underline; }
   border: 1px dashed var(--c-border);
 }
 
+/* 每行"立即监测"按钮（复审状态下显示在操作列） */
+.store-monitor-btn {
+  display: inline-block;
+  margin-left: var(--s-1);
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--c-primary);
+  border-radius: 50%;
+  background: var(--c-surface);
+  color: var(--c-primary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  vertical-align: middle;
+  transition: transform 0.4s ease, background 0.15s, color 0.15s;
+}
+.store-monitor-btn:hover {
+  background: var(--c-primary);
+  color: var(--c-surface);
+}
+.store-monitor-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.store-monitor-btn--spinning {
+  animation: monitor-spin 0.8s linear infinite;
+  pointer-events: none;
+}
+@keyframes monitor-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ===== Row modifiers (mappings) ===== */
 .row--warn { background: var(--c-warning-soft); }
 .row--error { background: var(--c-danger-soft); }

@@ -162,6 +162,13 @@
               </td>
               <td style="text-align: right;">
                 <a href="/project/{{ s.project_id }}" class="overview-row__view">查看 →</a>
+                {% if s.store_url and s.status and s.status.value == 'SECOND_REVIEW' %}
+                <button type="button"
+                        class="store-monitor-btn"
+                        data-action="monitor-now"
+                        data-project-id="{{ s.project_id }}"
+                        title="立即监测商店上架">↻</button>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -237,6 +244,45 @@
         wrap.appendChild(a);
       }
       idCell.appendChild(wrap);
+    });
+  })();
+</script>
+
+<script>
+  // 立即监测按钮：点击触发 /api/projects/{id}/check-store
+  (function () {
+    document.querySelectorAll(".store-monitor-btn").forEach((btn) => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const pid = btn.dataset.projectId;
+        if (!pid) return;
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.classList.add("store-monitor-btn--spinning");
+        const original = btn.textContent;
+        btn.textContent = "↻";
+        try {
+          const r = await fetch(`/api/projects/${encodeURIComponent(pid)}/check-store`, {
+            method: "POST",
+            headers: { "Accept": "application/json", "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            alert(`监测失败: ${data.detail || r.statusText}`);
+          } else if (data.published) {
+            alert(`✅ ${pid} 已上架！${data.title ? "（" + data.title + "）" : ""}`);
+          } else {
+            alert(`⏳ ${pid} 仍审核中：${data.reason || "unknown"}`);
+          }
+        } catch (e) {
+          alert(`网络错误: ${e.message}`);
+        } finally {
+          btn.classList.remove("store-monitor-btn--spinning");
+          btn.textContent = original;
+          btn.disabled = false;
+        }
+      });
     });
   })();
 </script>
