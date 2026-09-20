@@ -15,7 +15,8 @@ STATUS_CANDIDATES = ["状态", "当前状态", "项目状态", "Status", "status
 PROJECT_NAME_CANDIDATES = ["项目名", "项目名称", "Name", "name"]
 PACKAGE_NAME_CANDIDATES = ["包名", "Package", "package", "Package Name", "package_name"]
 # 商店地址（GP/App Store 等上架后的 URL；用于 SECOND_REVIEW 监测是否已上架）
-STORE_URL_CANDIDATES = ["商店地址", "开关服地址", "Shop URL", "store_url", "商店链接", "上架地址"]
+# 注意：不包含 "开关服地址"（那是游戏激活/开关服接口 URL，不是商店 URL）
+STORE_URL_CANDIDATES = ["商店地址", "Shop URL", "store_url", "商店链接", "上架地址"]
 # 上架地区（项目计划上架的国家/地区；将来用作代理池路由选择）
 LAUNCH_REGION_CANDIDATES = ["上架地区", "发布地区", "地区", "Region", "region", "Launch Region",
                             "Available Region", "Country"]
