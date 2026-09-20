@@ -52,6 +52,9 @@ async def get_projects(request: Request):
                 "status": s.status.value if s.status else None,
                 "dwell_seconds": s.dwell_seconds,
                 "payment_status": s.payment_status.value if s.payment_status else None,
+                "store_url": s.store_url,
+                "last_store_check_result": s.last_store_check_result,
+                "next_store_check_at": s.next_store_check_at.isoformat() if s.next_store_check_at else None,
             }
             for s in summaries
         ],

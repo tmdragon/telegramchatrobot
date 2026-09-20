@@ -24,6 +24,9 @@ function _rowSnapshot(tr) {
     name: tr.dataset.name || "",
     package: tr.dataset.package || "",
     payment: tr.dataset.payment || "",
+    store_status: tr.dataset.storeStatus || "",
+    store_next: tr.dataset.storeNext || "",
+    store_url: tr.dataset.storeUrl || "",
     dwell_seconds: Number(tr.querySelector("[data-dwell-seconds]")?.dataset.dwellSeconds || 0),
     el: tr,
   };
@@ -88,6 +91,18 @@ function _diffRow(tr, fresh) {
   }
   if ((tr.dataset.payment || "") !== (fresh.payment_status || "")) {
     tr.dataset.payment = fresh.payment_status || "NONE";
+    changed = true;
+  }
+  if ((tr.dataset.storeStatus || "") !== (fresh.store_status || "")) {
+    tr.dataset.storeStatus = fresh.store_status || "";
+    changed = true;
+  }
+  if ((tr.dataset.storeNext || "") !== (fresh.store_next || "")) {
+    tr.dataset.storeNext = fresh.store_next || "";
+    changed = true;
+  }
+  if ((tr.dataset.storeUrl || "") !== (fresh.store_url || "")) {
+    tr.dataset.storeUrl = fresh.store_url || "";
     changed = true;
   }
   const dwellEl = tr.querySelector("[data-dwell-seconds]");
@@ -183,6 +198,9 @@ async function _tick() {
       status: p.status,
       package_name: p.package_name,
       payment_status: p.payment_status,
+      store_status: p.last_store_check_result,
+      store_next: p.next_store_check_at,
+      store_url: p.store_url,
       dwell_seconds: p.dwell_seconds,
     }));
     _applyDiff(list);

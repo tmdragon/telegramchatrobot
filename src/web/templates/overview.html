@@ -136,10 +136,10 @@
                 data-status="{{ s.status.value if s.status else 'NONE' }}"
                 data-package="{{ s.package_name or '' }}"
                 data-name="{{ s.project_name or '' }}"
-                data-payment="{{ s.payment_status.value if s.payment_status else 'NONE' }}">
-              <td data-store-status="{{ s.last_store_check_result or '' }}"
-                  data-store-next="{{ s.next_store_check_at.isoformat() if s.next_store_check_at else '' }}"
-                  data-store-url="{{ s.store_url or '' }}">
+                data-payment="{{ s.payment_status.value if s.payment_status else 'NONE' }}"
+                data-store-status="{{ s.last_store_check_result or '' }}"
+                data-store-next="{{ s.next_store_check_at.isoformat() if s.next_store_check_at else '' }}"
+                data-store-url="{{ s.store_url or '' }}">
               <td>
                 <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
               </td>
@@ -202,15 +202,18 @@
       }
     }
     document.querySelectorAll("#overview-table .overview-row").forEach((tr) => {
-      const cell = tr.querySelector("td[data-store-status]");
-      if (!cell) return;
-      const status = cell.dataset.storeStatus || "";
-      const nextIso = cell.dataset.storeNext || "";
-      const url = cell.dataset.storeUrl || "";
+      const status = tr.dataset.storeStatus || "";
+      const nextIso = tr.dataset.storeNext || "";
+      const url = tr.dataset.storeUrl || "";
       const b = badge(status);
-      if (!b && !url) return; // 既无状态又无 URL：不显示徽章
+      // 没有监测结果且没有 URL 就不渲染
+      if (!b && !url) return;
+
+      // 把徽章插入到第一列（项目编号下方）
+      const idCell = tr.querySelector("td");
+      if (!idCell) return;
       const wrap = document.createElement("div");
-      wrap.style.cssText = "margin-top:2px;display:flex;gap:4px;flex-wrap:wrap;";
+      wrap.style.cssText = "margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;";
       if (b) {
         const tag = document.createElement("span");
         tag.className = `store-badge ${b.cls}`;
@@ -228,11 +231,12 @@
         a.href = url;
         a.target = "_blank";
         a.rel = "noopener";
-        a.textContent = "商店链接";
-        a.style.cssText = "font-size:11px;color:var(--c-primary);";
+        a.textContent = "🔗";
+        a.title = url;
+        a.style.cssText = "font-size:11px;color:var(--c-primary);text-decoration:none;";
         wrap.appendChild(a);
       }
-      cell.appendChild(wrap);
+      idCell.appendChild(wrap);
     });
   })();
 </script>
