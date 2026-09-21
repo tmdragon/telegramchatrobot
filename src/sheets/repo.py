@@ -176,10 +176,21 @@ class SheetRepo:
     ) -> str:
         """写入单元格，重读校验，返回最终值。
 
+        Args:
+            spreadsheet_name: 语义上是 spreadsheet_id（来自 SheetView.spreadsheet_id，
+                              经前端 field_id 编码透传）。参数名保留旧名以减少调用方改动，
+                              实际语义在 src/models/project.py:SheetView 里有定义。
+            worksheet_name: tab 名(worksheet title)。
+            row, col: 1-indexed 单元格位置。
+            new_value: 写入的新值。
+
         Raises:
             WriteVerificationError: 写后读出的值与 new_value 不一致。
+
+        修复说明: 之前用 client.open() 按名字查 spreadsheet,但传入的是 ID 字串,
+        gspread 按名字找不到 → StopIteration → API 返回 502 "transport error"。
         """
-        sh = self.client.open(spreadsheet_name)
+        sh = self.client.open_by_key(spreadsheet_name)
         ws = sh.worksheet(worksheet_name)
         ws.update_cell(row, col, new_value)
         verified = ws.cell(row, col).value
