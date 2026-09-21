@@ -1,18 +1,113 @@
-# 部署到阿里云国内版 (轻量应用服务器 / Ubuntu 22.04 LTS)
+# 部署到阿里云 / 海外 VM (Ubuntu 22.04 LTS)
 
 本目录包含生产环境部署用的所有文件,**不**依赖 docker / k8s —— 单 VM + systemd + nginx。
 
-> 本文档对应 [aliyun.com](https://www.aliyun.com/) 国内版(不是国际版 alibabacloud.com)。
-> 节点选**香港**(免 ICP 备案,当晚可上线);大陆节点需要先做 ICP 备案(7-20 天)。
+## 两种部署模式
 
-## 一次性部署
+| 模式 | 触发 | 适用 |
+|---|---|---|
+| **无域名 / HTTP only** | `bash setup.sh --no-domain` | **推荐起步**——访问 `http://<公网IP>/` |
+| 有域名 / HTTPS | `bash setup.sh your.domain.com you@example.com` | 有了域名之后升级 |
 
-### 1. 在阿里云国内版控制台创建实例
+> **默认建议先无域名上线**,以后买了域名直接重跑 setup.sh 切到 HTTPS,无需换 VM。
 
-1. 登录 [阿里云国内版](https://www.aliyun.com/) → **轻量应用服务器** → **立即购买** / **创建**
-2. 区域选 **香港**(免备案,个人项目推荐)
+## 一次性部署(无域名 / HTTP 模式)
+
+### 1. 在阿里云控制台创建实例
+
+1. 登录 [aliyun.com](https://www.aliyun.com/) → **轻量应用服务器** → 创建
+2. 区域:有**香港**选香港(免 ICP 备案);没有选**东南亚**(菲律宾/新加坡/马来西亚)也行
 3. 镜像选 **Ubuntu 22.04 LTS**
-4. 套餐选最便宜的(轻量应用服务器 2核2G 约 ¥28-35/月,新用户首年 ¥24)
+4. 套餐选最便宜的(2核2G SSD 50GB,约 ¥24-35/月)
+5. 设置 root 密码
+6. **创建**后等 1-3 分钟开机
+
+### 2. 拿公网 IP
+
+实例详情页 → 服务器详情 → "网络" 看公网 IP。轻量自带固定 IP,无需单独买。
+
+### 3. 准备 GCP 凭据 + 部署
+
+阿里云轻量默认 SSH 用户是 **root**,可直接登。
+
+```bash
+# 把 GCP service account JSON 拷到 VM(本地终端跑)
+scp /local/path/gcp-sa.json root@<公网IP>:~/
+
+# SSH 进 VM
+ssh root@<公网IP>
+```
+
+进入 VM 后,在 VM shell 里继续:
+
+```bash
+apt update && apt install -y git
+cd /opt
+[ -d /opt/checkgprobot ] || git clone <你的git仓库URL> /opt/checkgprobot
+cd /opt/checkgprobot
+
+# 放 GCP SA
+mkdir -p /etc/checkgprobot && chmod 700 /etc/checkgprobot
+mv /root/gcp-sa.json /etc/checkgprobot/gcp-sa.json
+chmod 600 /etc/checkgprobot/gcp-sa.json
+
+# 跑 setup（无域名模式：跳过 certbot，用 HTTP-only nginx）
+bash deploy/scripts/setup.sh --no-domain
+
+# 编辑真实 secrets + sheets
+nano /etc/checkgprobot/secrets.yaml
+nano /etc/checkgprobot/sheets.yaml
+
+# 重启服务
+systemctl restart checkgprobot
+
+# 看日志
+journalctl -u checkgprobot -n 50 -f
+# 应该看到 [config] [store] [data] [ui] Listening on http://127.0.0.1:8765
+# Ctrl+C 退出
+```
+
+setup 跑完会**自动打印公网 IP**,例如:
+```
+✅ 部署完成（HTTP 模式）
+5. 打开 Web: http://123.45.67.89/  (Basic Auth 用户名密码)
+```
+
+回到本地浏览器访问 `http://<公网IP>/`,弹 Basic Auth 框(用户名是 `admin`,密码是 setup 时 `htpasswd` 设的)。
+
+### 4. 防火墙确认
+
+轻量应用服务器防火墙**默认已开** 22/80/443,通常不用动。如果不通:
+控制台 → 你的实例 → **防火墙** → 添加 80 TCP。
+
+---
+
+## 升级到 HTTPS(以后买了域名时)
+
+```bash
+ssh root@<公网IP>
+cd /opt/checkgprobot
+sudo bash deploy/scripts/setup.sh your.domain.com you@example.com
+```
+
+会自动申请 Let's Encrypt 证书、改 nginx 为 443、HTTP → HTTPS 重定向。**secrets / sheets / 数据库都不动**。
+
+---
+
+## 文件说明
+
+| 文件 | 部署到 VM 的位置 | 用途 |
+|------|-----------------|------|
+| `systemd/checkgprobot.service` | `/etc/systemd/system/` | systemd unit,`Restart=always`,走 `secrets.env` |
+| `nginx/checkgprobot.conf` | `/etc/nginx/sites-available/` | **HTTPS** 模板(443 + certbot) |
+| `nginx/checkgprobot-http.conf` | `/etc/nginx/sites-available/` | **HTTP** 模板(80 only,无域名模式) |
+| `scripts/setup.sh` | — | 首次部署,支持 `--no-domain` 或 `<DOMAIN> <EMAIL>` |
+| `scripts/deploy.sh` | — | 升级:`git pull` + `pip install` + `systemctl restart` |
+| `scripts/backup.sh` | cron / 手动 | SQLite 在线备份,保留 14 天 |
+
+---
+
+## 老版流程(供有域名的用户参考)
 5. 设置 root 密码或 SSH key
 6. **创建**后等待 1-3 分钟开机
 

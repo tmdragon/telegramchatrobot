@@ -19,6 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bot.broadcast import BroadcastSvc
+from src.bot.templates import BroadcastTrigger
 from src.scheduler.config import BroadcastConfig
 from src.store_checker import check_app_published
 from src.web.cache import ProjectCache
@@ -162,9 +163,18 @@ async def trigger_store_check_now(
                 new_value="已上架",
             )
             await refresher.refresh_now()
-            # 触发 broadcast_project 让客户群立即收到"已上架"通知
-            # （refresh_now 本身不广播；这是 _refresh_and_broadcast_wrapper 的工作）
-            await broadcast_svc.broadcast_project(proj)
+            # 关键：proj 是 refresh_now 之前的旧引用，refresh 后 cache 已是新对象，
+            # 必须重新 cache.get(project_id) 拿新的（status=PUBLISHED, status_raw='已上架'），
+            # 否则 broadcast 会发"复审中"而非"已上架"——用户投诉的根因。
+            refreshed = cache.get(project_id)
+            if refreshed is not None:
+                try:
+                    await broadcast_svc.broadcast_project(
+                        refreshed, trigger=BroadcastTrigger.STATUS_CHANGE,
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                proj = refreshed  # 后面引用 project_name/status 时也用新值
             await broadcast_svc.broadcast_internal_only_with_text(
                 f"✅ 商店上架监测: {project_id} ({proj.project_name or '（未命名）'}) "
                 f"已从 {proj.status.value if proj.status else '?'} → PUBLISHED。"
@@ -285,6 +295,17 @@ async def _store_monitor_wrapper(
                 )
                 # 触发 refresh 让 cache 立即同步
                 await refresher.refresh_now()
+                # 通知客户群：仅发内部群会让客户群停留在旧状态（复审中），
+                # 用户在 Telegram 里永远看不到"已上架"变更通知。
+                # 用 refresh 后的最新 project（status_raw="已上架"）发客户群。
+                refreshed = cache.get(project.project_id)
+                if refreshed is not None:
+                    try:
+                        await broadcast_svc.broadcast_project(
+                            refreshed, trigger=BroadcastTrigger.STATUS_CHANGE,
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
                 await broadcast_svc.broadcast_internal_only_with_text(
                     f"✅ 商店上架监测: {project.project_id} ({project.project_name or '（未命名）'}) "
                     f"已从 SECOND_REVIEW → PUBLISHED。检测到：{result.get('title') or '?'}"

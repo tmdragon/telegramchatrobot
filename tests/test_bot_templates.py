@@ -1,7 +1,13 @@
 """播报文案模板测试。"""
 from datetime import datetime, timezone
 
-from src.bot.templates import render_broadcast, render_dryrun_preview, STATUS_EMOJI
+from src.bot.templates import (
+    BroadcastTrigger,
+    render_broadcast,
+    render_dryrun_preview,
+    STATUS_EMOJI,
+    TRIGGER_LABEL,
+)
 from src.models.project import Mapping, Project
 from src.models.status import StatusCode
 
@@ -135,3 +141,45 @@ def test_render_broadcast_falls_back_to_canonical_when_no_status_raw():
     text = render_broadcast(p, m, now, exceeded_threshold=False)
     status_line = next(l for l in text.splitlines() if l.startswith("▸ 当前状态"))
     assert "我方制作中" in status_line
+
+
+# ---------- 播报触发源（"自动" vs "状态更新监测"）----------
+
+def test_trigger_label_table_covers_known_triggers():
+    """所有 BroadcastTrigger 必须映射到一个非空中文文案。"""
+    assert BroadcastTrigger.SCHEDULED in TRIGGER_LABEL
+    assert BroadcastTrigger.STATUS_CHANGE in TRIGGER_LABEL
+    # SCHEDULED 应该是"定时播报"，STATUS_CHANGE 应该是"状态变更"类的字样
+    assert "播报" in TRIGGER_LABEL[BroadcastTrigger.SCHEDULED] or \
+           "自动" in TRIGGER_LABEL[BroadcastTrigger.SCHEDULED]
+    assert "状态" in TRIGGER_LABEL[BroadcastTrigger.STATUS_CHANGE]
+    # 不再硬编码 "自动播报" 当成唯一文案
+    assert "自动播报" not in TRIGGER_LABEL[BroadcastTrigger.STATUS_CHANGE]
+
+
+def test_render_broadcast_footer_label_scheduled():
+    """broadcast_all / cron 默认 SCHEDULED → footer 用"定时播报"类文案，不要再说"自动播报"。"""
+    p = _project()
+    m = _mapping()
+    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
+    text = render_broadcast(p, m, now, exceeded_threshold=False,
+                            trigger=BroadcastTrigger.SCHEDULED)
+    # 最后一行的关键文案（不严格匹配具体文字，只要不含旧的"自动播报"）
+    last_line = text.strip().splitlines()[-1]
+    assert "自动播报" not in text
+    # 必须包含 TRIGGER_LABEL 中的文案
+    assert TRIGGER_LABEL[BroadcastTrigger.SCHEDULED] in last_line
+
+
+def test_render_broadcast_footer_label_status_change():
+    """事件驱动（status update 检测触发）→ footer 用"状态变更"类文案。"""
+    p = _project()
+    m = _mapping()
+    now = datetime(2026, 9, 18, 21, 0, tzinfo=timezone.utc)
+    text = render_broadcast(p, m, now, exceeded_threshold=False,
+                            trigger=BroadcastTrigger.STATUS_CHANGE)
+    last_line = text.strip().splitlines()[-1]
+    assert "自动播报" not in text
+    assert TRIGGER_LABEL[BroadcastTrigger.STATUS_CHANGE] in last_line
+    # 且必须与 SCHEDULED 标签不同（这才算"区分两个事件"）
+    assert TRIGGER_LABEL[BroadcastTrigger.STATUS_CHANGE] != TRIGGER_LABEL[BroadcastTrigger.SCHEDULED]

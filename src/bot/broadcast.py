@@ -11,6 +11,10 @@
 dryrun=True 时只渲染首条 enabled 映射的 preview，不发、不写 log。
 
 管理员告警：失败 > 0 时调 notify_admin（懒加载，避免循环 import）。
+
+trigger 语义（footer 文案来源）：
+- SCHEDULED：cron / /reload 全员播报
+- STATUS_CHANGE：状态变更事件驱动（refresh diff、商店上架监测、滞留提醒）
 """
 from __future__ import annotations
 
@@ -19,7 +23,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from src.bot.service import BotService
-from src.bot.templates import render_broadcast, render_dryrun_preview
+from src.bot.templates import (
+    BroadcastTrigger,
+    render_broadcast,
+    render_dryrun_preview,
+)
 from src.models.project import Mapping, Project
 from src.sheets.mapping_repo import MappingRepo
 from src.store.db import Store
@@ -75,13 +83,23 @@ class BroadcastSvc:
         self._last_send_error = last_error
         return False
 
-    async def broadcast_project(self, project: Project) -> dict:
+    async def broadcast_project(
+        self,
+        project: Project,
+        *,
+        trigger: BroadcastTrigger = BroadcastTrigger.STATUS_CHANGE,
+    ) -> dict:
         """单项目播报（事件驱动）。
 
         与 broadcast_all 的区别：
         - 不读 cache（直接用传入的 project 对象）
         - 不受 skip_if_no_change 影响（已确认变化才调进来）
         - 失败时也 notify_admin
+
+        Args:
+            project: 要播报的项目对象（直接传入，不从 cache 读）
+            trigger: footer 文案来源——默认 STATUS_CHANGE，因为本函数通常在
+                     状态变更被检测到后调用；少数情况下可显式传 SCHEDULED。
 
         Returns:
             {sent, skipped, failed}
@@ -117,7 +135,7 @@ class BroadcastSvc:
                     project_id=project.project_id,
                     chat_id=chat_id,
                 )
-            text = render_broadcast(project, target_mapping, now, exceeded)
+            text = render_broadcast(project, target_mapping, now, exceeded, trigger=trigger)
             ok = await self._send_with_retry(chat_id, text)
             sent_at = datetime.now(timezone.utc)
             if ok:
@@ -251,11 +269,13 @@ class BroadcastSvc:
                         chat_id=chat_id,
                     )
 
-                text = render_broadcast(project, target_mapping, now, exceeded)
+                text = render_broadcast(project, target_mapping, now, exceeded,
+                                      trigger=BroadcastTrigger.SCHEDULED)
 
                 if dryrun:
                     if first_preview is None:
-                        first_preview = render_dryrun_preview(project, target_mapping, now)
+                        first_preview = render_dryrun_preview(project, target_mapping, now,
+                                                             trigger=BroadcastTrigger.SCHEDULED)
                     continue
 
                 ok = await self._send_with_retry(chat_id, text)

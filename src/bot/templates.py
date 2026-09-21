@@ -8,20 +8,39 @@ render_broadcast() 产出 Telegram Markdown（PTB 客户端会再加 MarkdownV2 
 📊 *PRJ-001 项目一*
 ▸ 当前状态：🟣 对方验收中
 
-— 09-18 21:00 自动播报
+— 09-18 21:00 定时播报
 
 超过 per_status_thresholds 阈值时 head 行追加 ⚠。
 
 DISPLAY_TZ 在 main.py 启动时由 cfg.display_timezone 设置；不设就是 UTC。
+
+播报触发源（trigger）：
+- SCHEDULED：定时/cron/手动 /reload 全员播报 → footer 显示"定时播报"
+- STATUS_CHANGE：状态变更被检测到（refresh diff / 商店上架监测 / 滞留提醒）→ "状态变更"
+两种事件以 footer 文案区分，避免所有播报下面都写"自动播报"造成混淆。
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.models.project import Mapping, Project
 from src.models.status import StatusCode
+
+
+class BroadcastTrigger(str, Enum):
+    """播报触发源。footer 用 TRIGGER_LABEL[trigger] 区分。"""
+    SCHEDULED = "SCHEDULED"            # 定时 / cron / /reload 全员播报
+    STATUS_CHANGE = "STATUS_CHANGE"    # 状态变更被检测到（refresh diff / 商店监测 / 滞留）
+
+
+# 中文文案表。改这里就改所有 footer 后缀。
+TRIGGER_LABEL: dict[BroadcastTrigger, str] = {
+    BroadcastTrigger.SCHEDULED: "定时播报",
+    BroadcastTrigger.STATUS_CHANGE: "状态变更",
+}
 
 
 # 由 main.py 在启动时根据 cfg.display_timezone 设置
@@ -93,6 +112,7 @@ def render_broadcast(
     now: datetime,
     exceeded_threshold: bool,
     *,
+    trigger: BroadcastTrigger = BroadcastTrigger.SCHEDULED,
     responsible_person: Optional[str] = None,
     source_sheet_name: Optional[str] = None,
 ) -> str:
@@ -103,16 +123,18 @@ def render_broadcast(
         head += " ⚠"
     # 显示时区（用户在 cfg.display_timezone 配置，如 Asia/Shanghai）
     local_now = now.astimezone(DISPLAY_TZ)
+    label = TRIGGER_LABEL[trigger]
     lines = [
         head,
         _format_status_line(project),
         f"▸ 包名：`{pkg}`",
         "",
-        f"— `{local_now.strftime('%m-%d %H:%M')}` 自动播报",
+        f"— `{local_now.strftime('%m-%d %H:%M')}` {label}",
     ]
     return "\n".join(lines)
 
 
-def render_dryrun_preview(project: Project, mapping: Mapping, now: datetime) -> str:
-    body = render_broadcast(project, mapping, now, exceeded_threshold=False)
+def render_dryrun_preview(project: Project, mapping: Mapping, now: datetime,
+                          *, trigger: BroadcastTrigger = BroadcastTrigger.SCHEDULED) -> str:
+    body = render_broadcast(project, mapping, now, exceeded_threshold=False, trigger=trigger)
     return f"🧪 *DRYRUN 预览*\n```\n{body}\n```"
