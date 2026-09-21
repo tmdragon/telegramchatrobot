@@ -141,6 +141,50 @@ UI 项目映射管理页 → 选中 mapping → 「测试发送」按钮（Phase
 - `APScheduler>=3.10`
 - `pytest-asyncio>=1.0`
 
+## 生产部署（阿里云国内版 / 轻量应用服务器 / 香港节点 / Ubuntu 22.04）
+
+适用于把本项目从 `127.0.0.1:8765` 本地模式推到云端 HTTPS 入口。
+
+**前置**：[aliyun.com](https://www.aliyun.com/) 账号；域名 DNS A 记录指向实例公网 IP；GCP service account JSON 准备好（访问 Google Sheets 用）。
+
+**为什么香港节点**：免 ICP 备案，当晚上线；大陆节点需要备案（7-20 天）。
+
+流程概要：
+
+1. 阿里云国内版控制台 → 轻量应用服务器 → 创建（Ubuntu 22.04 LTS，香港区，约 ¥24-35/月）
+2. 实例创建后自带固定公网 IP（**不用单独买 EIP**）
+3. DNS 把 A 记录指向实例的公网 IP
+4. `scp gcp-sa.json root@<公网IP>:~/`
+5. SSH 进 VM（默认用户 `root`），`apt install -y git`，`git clone <repo> /opt/checkgprobot`
+6. 把 gcp-sa.json 移到 `/etc/checkgprobot/gcp-sa.json`，`chmod 600`
+7. `bash deploy/scripts/setup.sh your.domain.com you@example.com`
+8. 编辑 `/etc/checkgprobot/secrets.yaml` + `/etc/checkgprobot/sheets.yaml`
+9. `systemctl restart checkgprobot`
+10. 浏览器打开 `https://your.domain.com/`，弹 Basic Auth 框
+
+升级：
+
+```bash
+cd /opt/checkgprobot && sudo bash deploy/scripts/deploy.sh
+```
+
+日常排错：
+
+```bash
+sudo journalctl -u checkgprobot -f     # 应用日志
+sudo tail -f /var/log/nginx/error.log  # nginx 错误
+sudo systemctl restart checkgprobot
+```
+
+环境变量可以覆盖 `secrets.yaml` 的字段(优先级从高到低)：
+
+1. systemd EnvironmentFile(`/etc/checkgprobot/secrets.env`)
+2. `GOOGLE_APPLICATION_CREDENTIALS`(Google SDK 标准)
+3. `CHECKGPROBOT_TELEGRAM_BOT_TOKEN` / `CHECKGPROBOT_ADMIN_CHAT_ID` 等
+4. `secrets.yaml` 字段值
+
+详见 [deploy/README.md](deploy/README.md)。
+
 ## 测试
 
 ```bash

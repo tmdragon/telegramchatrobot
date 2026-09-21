@@ -1,0 +1,27 @@
+[Unit]
+Description=checkGPRobot (FastAPI + Telegram bot + APScheduler)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/checkgprobot
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/etc/checkgprobot/secrets.env
+ExecStart=/opt/checkgprobot/.venv/bin/python run.py \
+    --secrets /etc/checkgprobot/secrets.yaml \
+    --sheets  /etc/checkgprobot/sheets.yaml \
+    --db      /opt/checkgprobot/data/checkgprobot.db
+Restart=always
+RestartSec=5
+# 日志进 journald: journalctl -u checkgprobot -f
+StandardOutput=journal
+StandardError=journal
+
+# 稍微硬化一点：服务只监听 127.0.0.1（公网入口走 nginx）
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
