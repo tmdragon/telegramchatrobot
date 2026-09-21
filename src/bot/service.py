@@ -1,12 +1,19 @@
 """BotService：python-telegram-bot Application 的异步包装。
 
-职责：
-- start(token): 构造 Application，调 getMe 验证 token，启动 polling
-- stop(): 反向关闭（updater → app → shutdown）
-- send_message(chat_id, text): 发送消息；让异常向上抛，由调用方（BroadcastSvc）做重试
-- get_chat_id_hint(): 返回最近一次任意 update 的 from_user.id，admin 自助查询用
+两阶段生命周期：
+1. init(token)：构造 Application + 验证 token（不 initialize / 不 polling）
+2. register_handlers(app)：调用方在此窗口注册 handlers + 注入 bot_data
+3. start_polling()：initialize → start → start_polling(drop_pending_updates=True)
 
-PTB v20+ 的 Application 是 asyncio.Application，所有 init/start/shutdown 协程化。
+stop() 反向关闭（updater → app → shutdown）。
+send_message(chat_id, text)：发送消息；让异常向上抛，由调用方做重试。
+get_chat_id_hint()：返回最近一次任意 update 的 from_user.id，admin 自助查询用。
+
+PTB v20+ 契约：handlers 必须在 initialize 之前注册（参见 commands.py:13）。
+
+Backward-compat: start(token) = init + start_polling 一气呵成。
+⚠ start() 不在 init/start_polling 之间注册 handlers；新代码请直接调用
+init() → register_handlers(app) → start_polling()。
 """
 from __future__ import annotations
 
@@ -21,8 +28,11 @@ class BotService:
         self._bot_username: Optional[str] = None
         self._last_update_user_id: Optional[int] = None
 
-    async def start(self, token: str) -> None:
-        """构造 Application、验证 token、启动 polling。
+    async def init(self, token: str) -> None:
+        """构造 Application + 验证 token（不 initialize / 不 polling）。
+
+        调用方应在 init 之后、start_polling 之前向 self._app 注册 handlers
+        并填充 bot_data（PTB v20+ 契约：handlers 必须在 initialize 之前注册）。
 
         Raises:
             RuntimeError: getMe 抛异常（token 无效 / 网络问题）
@@ -36,9 +46,30 @@ class BotService:
             raise RuntimeError(f"getMe returned invalid user: {me!r}")
         self._bot_username = me.username
 
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling(drop_pending_updates=True)
+    async def start_polling(self) -> None:
+        """启动 updater：initialize → start → start_polling。
+
+        调用方必须先 init() 并在调用前完成 handlers 注册与 bot_data 注入。
+        drop_pending_updates=True：丢弃 polling 启动前堆积的 update。
+
+        Raises:
+            RuntimeError: 未先调用 init()
+        """
+        if self._app is None:
+            raise RuntimeError("BotService.init() must be called before start_polling()")
+        await self._app.initialize()
+        await self._app.start()
+        await self._app.updater.start_polling(drop_pending_updates=True)
+
+    async def start(self, token: str) -> None:
+        """Backward-compat: init + start_polling 一气呵成。
+
+        ⚠ 不在 init/start_polling 之间注册 handlers；新代码请直接调用
+        init() → register_handlers(app) → start_polling()。
+        仅保留给不需要在 polling 前注册 handlers 的代码路径。
+        """
+        await self.init(token)
+        await self.start_polling()
 
     async def stop(self) -> None:
         """关闭顺序：updater → app → shutdown。"""

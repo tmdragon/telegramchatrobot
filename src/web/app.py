@@ -49,8 +49,9 @@ def create_app(
     async def lifespan(app: FastAPI):
         # === 启动 ===
         if bot_service is not None:
-            await bot_service.start(cfg.telegram_bot_token)
-            # 注册命令处理器
+            # 1) build + validate token（不动事件循环）
+            await bot_service.init(cfg.telegram_bot_token)
+            # 2) 注册 handlers + 注入 bot_data（在 initialize 之前完成——PTB v20+ 契约）
             from src.bot.commands import register_handlers
 
             cache = app.state.cache
@@ -66,6 +67,8 @@ def create_app(
                 store=store_ref,
             )
             bot_service._app.bot_data["mapping_repo"] = mapping_repo
+            # 3) 启动 polling（handlers 已注册）
+            await bot_service.start_polling()
 
         if scheduler is not None:
             scheduler.start()
