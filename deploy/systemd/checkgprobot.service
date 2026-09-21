@@ -10,9 +10,10 @@ WorkingDirectory=/opt/checkgprobot
 Environment="PYTHONUNBUFFERED=1"
 EnvironmentFile=/etc/checkgprobot/secrets.env
 ExecStart=/opt/checkgprobot/.venv/bin/python run.py \
-    --secrets /etc/checkgprobot/secrets.yaml \
-    --sheets  /etc/checkgprobot/sheets.yaml \
-    --db      /opt/checkgprobot/data/checkgprobot.db
+    --secrets         /etc/checkgprobot/secrets.yaml \
+    --sheets          /etc/checkgprobot/sheets.yaml \
+    --scheduler-config /etc/checkgprobot/scheduler.yaml \
+    --db              /opt/checkgprobot/data/checkgprobot.db
 Restart=always
 RestartSec=5
 # 日志进 journald: journalctl -u checkgprobot -f

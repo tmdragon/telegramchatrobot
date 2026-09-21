@@ -107,6 +107,19 @@ if [[ ! -f "$ETC_DIR/sheets.yaml" ]]; then
 fi
 chmod 644 "$ETC_DIR/sheets.yaml"
 
+echo "=== 5.5/8 scheduler.yaml ==="
+# scheduler.yaml 必须含 broadcast: wrapper(否则 load_scheduler_config 抛 ValueError)
+if [[ ! -f "$ETC_DIR/scheduler.yaml" ]]; then
+    if [[ -f "$APP_DIR/config/scheduler.yaml.example" ]]; then
+        cp "$APP_DIR/config/scheduler.yaml.example" "$ETC_DIR/scheduler.yaml"
+        echo "📝 生成 $ETC_DIR/scheduler.yaml — 请填 admin_broadcast_chats(内部管理群):"
+        echo "   nano $ETC_DIR/scheduler.yaml"
+    else
+        echo "⚠ $APP_DIR/config/scheduler.yaml.example 不存在,跳过(会用默认配置)"
+    fi
+fi
+chmod 644 "$ETC_DIR/scheduler.yaml" 2>/dev/null || true
+
 echo "=== 6/8 secrets.env ==="
 if [[ ! -f "$ETC_DIR/secrets.env" ]]; then
     cat > "$ETC_DIR/secrets.env" <<EOF
@@ -123,7 +136,8 @@ echo "=== 7/8 Basic Auth ==="
 if [[ ! -f /etc/nginx/.htpasswd ]]; then
     echo "📝 创建 Web UI 登录用户名密码:"
     htpasswd -c /etc/nginx/.htpasswd admin
-    chmod 640 /etc/nginx/.htpasswd
+    # 644 (others readable) — nginx worker 以 www-data 运行,需要能读
+    chmod 644 /etc/nginx/.htpasswd
 fi
 
 echo "=== 8/8 systemd + nginx ==="
