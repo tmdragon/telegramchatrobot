@@ -32,6 +32,38 @@ class FieldEditBody(BaseModel):
     new_value: str
 
 
+class NewMappingBody(BaseModel):
+    chat_id: int
+    note: str = ""
+
+
+class NewProjectBody(BaseModel):
+    project_id: str
+    project_name: str = ""
+    package_name: str = ""
+    launch_region: str = ""
+    mapping: Optional[NewMappingBody] = None
+
+
+def _unique_groups(mappings: list) -> list[dict]:
+    """从 mapping 列表中按 chat_id 去重,只保留 enabled=True 的群。
+
+    返回按 chat_id 排序的 [{chat_id, note}, ...] 列表。
+    用于"新增项目"表单的群下拉选择。
+    """
+    seen: dict[str, str] = {}  # chat_id -> note
+    for m in mappings:
+        if not m.enabled:
+            continue
+        if m.chat_id in seen:
+            continue  # 重复 chat_id 跳过(保留第一次见到的 note)
+        seen[m.chat_id] = m.note or ""
+    return [
+        {"chat_id": cid, "note": note}
+        for cid, note in sorted(seen.items(), key=lambda kv: int(kv[0]))
+    ]
+
+
 @router.get("/projects")
 async def get_projects(request: Request):
     app = request.app
@@ -466,4 +498,117 @@ async def post_test_send(request: Request, project_id: str):
         "ok": True,
         "chat_id": chat_id,
         "message_preview": text,
+    }
+
+
+@router.get("/groups")
+async def get_groups(request: Request):
+    """返回从 mapping sheet 提取的 (chat_id, 备注) 去重列表(用于新增项目表单的群下拉)。
+
+    只包含 enabled=True 的 mapping;按 chat_id 排序;chat_id 是字符串形式。
+    """
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    try:
+        mappings = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception as e:  # noqa: BLE001
+        log.exception("mapping load failed for /api/groups")
+        raise HTTPException(status_code=502, detail=f"mapping load failed: {e}")
+    return {"groups": _unique_groups(mappings)}
+
+
+@router.post("/projects")
+async def post_project(request: Request, body: NewProjectBody):
+    """新增项目(网页表单提交入口)。
+
+    流程:
+    1. 校验 project_id 唯一(cache + sheet 都查)
+    2. 在 master spreadsheet append 新行,默认状态"对方下单"
+    3. 若 body.mapping 提供,在 mapping sheet upsert(enabled=True)
+    4. 重新拉整个 sheet 更新 cache(确保一致性)
+    5. 返回新项目 id
+
+    错误:
+    - 409 Conflict:project_id 已存在
+    - 422 Unprocessable Entity:必填字段缺失 / chat_id 不是整数
+    - 502 Bad Gateway:gspread 写 sheet 失败
+    """
+    from src.config import AppConfig
+
+    app = request.app
+    cfg: AppConfig = app.state.cfg
+    cache = app.state.cache
+    sheet_repo = app.state.sheet_repo
+    mapping_repo = app.state.mapping_repo
+
+    pid = body.project_id.strip()
+    if not pid:
+        raise HTTPException(status_code=422, detail="project_id is empty")
+
+    # 1. 校验唯一 —— 先查 cache(快),再扫 sheet(防 cache 过期)
+    if cache.get(pid) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"project_id '{pid}' already exists in cache",
+        )
+    master = next((s for s in cfg.spreadsheets if s.role == "master"), None)
+    if master is None:
+        raise HTTPException(status_code=500, detail="no master spreadsheet configured")
+    try:
+        existing_row = await asyncio.to_thread(
+            sheet_repo.find_row_by_project_id, master.id, master.name, pid
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("find_row_by_project_id failed for new project %s", pid)
+        raise HTTPException(status_code=502, detail=f"sheet lookup failed: {e}")
+    if existing_row is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"project_id '{pid}' already exists in sheet at row {existing_row}",
+        )
+
+    # 2. 写 sheet
+    values = {
+        "project_id": pid,
+        "status": "对方下单",  # 固定默认
+        "project_name": body.project_name.strip(),
+        "package_name": body.package_name.strip(),
+        "launch_region": body.launch_region.strip(),
+    }
+    try:
+        await asyncio.to_thread(
+            sheet_repo.append_row, master.id, master.name, values
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("append_row failed for new project %s", pid)
+        raise HTTPException(status_code=502, detail=f"sheet append failed: {e}")
+
+    # 3. mapping(可选)
+    if body.mapping is not None:
+        mapping = MappingModel(
+            project_id=pid,
+            chat_id=str(body.mapping.chat_id),
+            note=body.mapping.note.strip(),
+            enabled=True,
+            last_broadcast_at=None,
+        )
+        try:
+            await asyncio.to_thread(mapping_repo.upsert, mapping)
+        except Exception as e:  # noqa: BLE001
+            log.exception("mapping upsert failed for new project %s", pid)
+            # sheet 已经写了,mapping 失败不回滚(让用户手动修复)
+
+    # 4. 刷新 cache(整张 sheet 重读,确保一致)
+    try:
+        new_projects = await asyncio.to_thread(sheet_repo.fetch_all, cfg.spreadsheets)
+        cache.replace(new_projects)
+    except Exception as e:  # noqa: BLE001
+        log.exception("cache refresh failed after new project %s", pid)
+        # cache 暂留旧数据,但 sheet 已成功,下次 refresh 会同步
+
+    return {
+        "ok": True,
+        "project_id": pid,
+        "status": "对方下单",
+        "mapping_chat_id": body.mapping.chat_id if body.mapping else None,
     }

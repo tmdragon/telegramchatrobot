@@ -82,3 +82,94 @@ def test_update_cell_empty_value_raises():
     )
     # 写完后读回 ""(因为我们 mock 的 cell.return_value.value = "")
     assert result == ""
+
+
+def test_append_row_writes_to_known_columns():
+    """append_row 根据 header 检测列位置,把字段值写到正确列,缺失列留空。"""
+    fake_ws = MagicMock()
+    fake_ws.title = "项目主表"
+    # 表头: 6 列,project_id / status / project_name / package_name / launch_region / 备注
+    fake_ws.row_values.return_value = [
+        "项目编号", "状态", "项目名称", "包名", "上架地区", "备注"
+    ]
+
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    repo.append_row(
+        "1ABC_spreadsheet_id",
+        "项目主表",
+        values={
+            "project_id": "BMW-789",
+            "status": "对方下单",
+            "project_name": "BMW New Game",
+            "package_name": "com.bmw.newgame",
+            "launch_region": "India",
+        },
+    )
+
+    # 应该被调用 append_row,且 row_values 被读以确定列位置
+    fake_ws.row_values.assert_called_once_with(1)
+    # 写入的行数据应该按列顺序排列
+    fake_ws.append_row.assert_called_once()
+    written_row = fake_ws.append_row.call_args[0][0]
+    assert written_row[0] == "BMW-789"        # 项目编号
+    assert written_row[1] == "对方下单"      # 状态
+    assert written_row[2] == "BMW New Game"  # 项目名称
+    assert written_row[3] == "com.bmw.newgame"  # 包名
+    assert written_row[4] == "India"          # 上架地区
+    assert written_row[5] == ""                # 备注 未提供,空
+
+
+def test_append_row_unknown_field_is_ignored():
+    """未识别的字段(不在 field_to_candidates 里)静默忽略。"""
+    fake_ws = MagicMock()
+    fake_ws.title = "项目主表"
+    fake_ws.row_values.return_value = ["项目编号", "状态", "项目名称"]
+
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    repo.append_row(
+        "1ABC_spreadsheet_id",
+        "项目主表",
+        values={
+            "project_id": "BMW-001",
+            "status": "对方下单",
+            "random_field": "应该被忽略",  # 不在 field_to_candidates 里
+        },
+    )
+
+    fake_ws.append_row.assert_called_once()
+    written_row = fake_ws.append_row.call_args[0][0]
+    assert written_row == ["BMW-001", "对方下单", ""]
+
+
+def test_append_row_missing_column_leaves_empty():
+    """如果表里没有 '上架地区' 列,该字段写入时整列空着。"""
+    fake_ws = MagicMock()
+    fake_ws.title = "项目主表"
+    # 表头里没有 "上架地区"
+    fake_ws.row_values.return_value = ["项目编号", "状态", "项目名称"]
+
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    repo.append_row(
+        "1ABC_spreadsheet_id",
+        "项目主表",
+        values={
+            "project_id": "WW-100",
+            "launch_region": "India",  # 列不存在 → 写入时被跳过
+        },
+    )
+
+    fake_ws.append_row.assert_called_once()
+    written_row = fake_ws.append_row.call_args[0][0]
+    # 长度与表头一致,launch_region 列位置(不存在)保留为空
+    assert len(written_row) == 3
+    assert written_row[0] == "WW-100"
+    assert all(c == "" for c in written_row) or written_row == ["WW-100", "", ""]

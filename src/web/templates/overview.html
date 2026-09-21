@@ -9,9 +9,70 @@
     <span style="font-size: 13px; color: var(--c-text-muted); font-weight: normal;">
       共 <strong data-project-count>{{ summaries | length }}</strong> 个项目
     </span>
+    <button type="button" id="btn-new-project"
+            class="page__title-btn"
+            title="新增项目（默认状态：对方下单）">
+      + 新增项目
+    </button>
   </h1>
 
   {% include "partials/_error_banner.html" %}
+
+  {# 新增项目 modal（默认隐藏，由 new-project.js 控制） #}
+  <div id="new-project-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal__panel" role="dialog" aria-labelledby="new-project-title">
+      <h2 id="new-project-title" class="modal__title">新增项目</h2>
+      <form id="new-project-form" autocomplete="off">
+        <div class="form-row">
+          <label class="form-row__label" for="np-project-id">项目编号 *</label>
+          <input id="np-project-id" name="project_id" type="text" required
+                 placeholder="如 BMW-789" autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="np-project-name">项目名称 *</label>
+          <input id="np-project-name" name="project_name" type="text" required>
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="np-package-name">包名</label>
+          <input id="np-package-name" name="package_name" type="text"
+                 placeholder="com.example.app">
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="np-launch-region">上架地区</label>
+          <input id="np-launch-region" name="launch_region" type="text"
+                 placeholder="India / 中国 / 美国">
+        </div>
+        <hr class="form-divider">
+        <div class="form-row form-row--checkbox">
+          <label>
+            <input type="checkbox" id="np-enable-mapping">
+            <span>映射到客户群</span>
+          </label>
+        </div>
+        <div id="np-mapping-fields" hidden>
+          <div class="form-row">
+            <label class="form-row__label" for="np-chat-id">群 chat_id</label>
+            <select id="np-chat-id-select">
+              <option value="">-- 选择已有群 --</option>
+            </select>
+            <input id="np-chat-id" name="chat_id" type="number"
+                   placeholder="或直接输入新群 ID（负数，如 -1001234567890）">
+          </div>
+          <div class="form-row">
+            <label class="form-row__label" for="np-mapping-note">备注</label>
+            <input id="np-mapping-note" name="mapping_note" type="text"
+                   placeholder="BMW 客户群">
+          </div>
+        </div>
+        <div class="modal__actions">
+          <button type="button" data-modal-close class="btn btn--ghost">取消</button>
+          <button type="submit" id="np-submit" class="btn btn--primary">保存</button>
+        </div>
+      </form>
+      <div id="new-project-error" class="form-error" hidden></div>
+    </div>
+  </div>
 
   {% if summaries %}
     <section class="overview-card">

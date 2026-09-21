@@ -219,6 +219,53 @@ class SheetRepo:
                 return idx
         return None
 
+    def append_row(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        values: dict,
+    ) -> None:
+        """在 sheet 末尾追加一行,字段值按 HeaderDetector 自动定位列。
+
+        Args:
+            spreadsheet_id: spreadsheet 的 ID（不是 name）。
+            worksheet_name: tab 名。
+            values: 字段名到值的映射,例如
+                {"project_id": "BMW-789", "status": "对方下单",
+                 "project_name": "...", "package_name": "...", "launch_region": "..."}。
+                支持的字段: project_id / status / project_name / package_name / launch_region。
+                未识别的字段(不在 HeaderDetector 候选里)静默忽略;
+                缺失的列(表里没有该字段)整列留空,不影响其他列写入。
+
+        Raises:
+            gspread.APIError: 网络/权限错误(由调用方 502 处理)。
+        """
+        sh = self.client.open_by_key(spreadsheet_id)
+        ws = sh.worksheet(worksheet_name)
+        headers = ws.row_values(1)
+        if not headers:
+            raise ValueError(f"sheet '{worksheet_name}' has no header row")
+        detector = HeaderDetector(headers)
+
+        field_to_candidates = {
+            "project_id": PROJECT_ID_CANDIDATES,
+            "status": STATUS_CANDIDATES,
+            "project_name": PROJECT_NAME_CANDIDATES,
+            "package_name": PACKAGE_NAME_CANDIDATES,
+            "launch_region": LAUNCH_REGION_CANDIDATES,
+        }
+
+        row_data = [""] * len(headers)
+        for field_key, value in values.items():
+            candidates = field_to_candidates.get(field_key)
+            if candidates is None:
+                continue
+            col_idx = detector.find_column(candidates)
+            if col_idx is not None and 1 <= col_idx <= len(row_data):
+                row_data[col_idx - 1] = str(value)
+
+        ws.append_row(row_data, value_input_option="USER_ENTERED")
+
     def find_column_by_header(
         self,
         spreadsheet_id: str,

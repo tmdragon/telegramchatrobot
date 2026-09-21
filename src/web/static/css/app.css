@@ -498,16 +498,98 @@ a:hover { text-decoration: underline; }
 
 /* ===== Modal ===== */
 .modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.modal[hidden] { display: none !important; }
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(31,35,40,0.45);
+}
+.modal__panel {
+  position: relative;
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
   padding: var(--s-5);
-  min-width: 360px;
+  min-width: 420px;
+  max-width: 560px;
+  width: 100%;
   background: var(--c-surface);
   box-shadow: var(--sh-lg);
 }
-.modal::backdrop { background: rgba(31,35,40,0.4); }
-.modal__title { margin: 0 0 var(--s-3); font-size: 16px; }
+.modal__title { margin: 0 0 var(--s-3); font-size: 16px; font-weight: 600; }
 .modal__actions { display: flex; gap: var(--s-2); justify-content: flex-end; margin-top: var(--s-4); }
+
+/* ===== Form ===== */
+.form-row { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); }
+.form-row__label { font-size: 13px; font-weight: 500; color: var(--c-text-muted); }
+.form-row input[type="text"],
+.form-row input[type="number"],
+.form-row select {
+  padding: 6px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 14px;
+}
+.form-row input:focus,
+.form-row select:focus { outline: 2px solid var(--c-primary); outline-offset: -1px; }
+.form-row--checkbox label { display: inline-flex; gap: var(--s-2); align-items: center; cursor: pointer; }
+.form-divider { border: none; border-top: 1px solid var(--c-border); margin: var(--s-4) 0; }
+.form-error {
+  margin-top: var(--s-3);
+  padding: 8px 12px;
+  background: rgba(220, 80, 80, 0.12);
+  color: #c8473a;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+}
+.form-error[hidden] { display: none; }
+
+/* ===== Buttons (form 用) ===== */
+.btn {
+  padding: 6px 14px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn--primary { background: var(--c-primary); color: var(--c-surface); border-color: var(--c-primary); }
+.btn--primary:hover { opacity: 0.92; }
+.btn--primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn--ghost { background: transparent; color: var(--c-text); border-color: var(--c-border); }
+.btn--ghost:hover { background: var(--c-surface-muted, rgba(0,0,0,0.04)); }
+
+/* ===== Page title button (新增项目 +) ===== */
+.page__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+.page__title-btn {
+  margin-left: auto;
+  padding: 6px 14px;
+  background: var(--c-primary);
+  color: var(--c-surface);
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.page__title-btn:hover { opacity: 0.92; }
 
 /* ===== Spinner ===== */
 .spinner {

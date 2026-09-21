@@ -13,7 +13,11 @@ startAutoRefresh();
 // 注意：mappings 页面的 CRUD JS 处理器不在 Phase 2 范围（T10b 决定）；
 // 该页面仅渲染，按钮存在但不响应 —— 无 mapping-crud.js 模块。
 const PAGE_MODULES = {
-  overview: () => import("./overview-live.js").then((m) => m.start()),
+  overview: () => import("./overview-live.js").then(async (m) => {
+    m.start();
+    const np = await import("./new-project.js");
+    np.init();
+  }),
   detail: () => import("./inline-edit.js"),
 };
 
