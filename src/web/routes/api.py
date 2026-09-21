@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -15,6 +16,8 @@ from src.models.project import Mapping as MappingModel
 from src.models.status import normalize as normalize_status
 from src.sheets.repo import WriteVerificationError
 from src.web.cache import LOCKED_RECOGNIZED_AS
+
+log = logging.getLogger(__name__)
 
 _CHAT_ID_RE = re.compile(r"^-?\d+$")
 
@@ -242,6 +245,8 @@ async def put_field(request: Request, project_id: str, field_id: str, body: Fiel
             },
         )
     except Exception as e:  # noqa: BLE001
+        log.exception("transport error: gspread write failed (project=%s sheet=%s row=%s col=%s)",
+                     project_id, sheet_name, row, col)
         raise HTTPException(status_code=502, detail=f"transport error: {e}")
 
     # 更新 cache
