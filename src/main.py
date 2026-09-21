@@ -24,6 +24,9 @@ def main(argv: list[str] | None = None) -> int:
                         default=Path("config/secrets.yaml"))
     parser.add_argument("--sheets", type=Path,
                         default=Path("config/sheets.yaml"))
+    parser.add_argument("--scheduler-config", type=Path,
+                        default=Path("config/scheduler.yaml"),
+                        help="scheduler.yaml 路径;生产部署指向 /etc/checkgprobot/scheduler.yaml")
     parser.add_argument("--db", type=Path,
                         default=Path("data/checkgprobot.db"))
     args = parser.parse_args(argv)
@@ -89,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     # Token 是占位符时不构造 BotService（让 lifespan 跳过 bot/scheduler，仅跑 UI）
     token = cfg.telegram_bot_token or ""
     bot_service = BotService() if (token and ":" in token and not token.startswith("REPLACE")) else None
-    scheduler_cfg_path = Path("config/scheduler.yaml")
+    scheduler_cfg_path = args.scheduler_config
     # 缺 scheduler.yaml 时回退默认配置（BroadcastConfig 自带 times/weekdays_only 默认）
     try:
         scheduler_cfg = load_scheduler_config(scheduler_cfg_path)
