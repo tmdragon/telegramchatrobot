@@ -294,3 +294,28 @@ def test_get_info_field_columns_empty_when_no_info_columns():
         SpreadsheetConfig(id="ss1", name="项目主表", role="master")
     )
     assert fields == []
+
+
+def test_append_row_writes_store_url():
+    """append_row 应该把 store_url 写到「商店地址」列(由 HeaderDetector 定位)。"""
+    fake_ws = MagicMock()
+    fake_ws.title = "项目主表"
+    fake_ws.row_values.return_value = ["项目编号", "状态", "商店地址"]
+
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    repo.append_row(
+        "1ABC_spreadsheet_id",
+        "项目主表",
+        values={
+            "project_id": "WW-700",
+            "store_url": "https://play.google.com/store/apps/details?id=com.ww.app",
+        },
+    )
+
+    fake_ws.append_row.assert_called_once()
+    written_row = fake_ws.append_row.call_args[0][0]
+    assert written_row[0] == "WW-700"
+    assert written_row[2] == "https://play.google.com/store/apps/details?id=com.ww.app"

@@ -42,6 +42,7 @@ class NewProjectBody(BaseModel):
     project_name: str = ""
     package_name: str = ""
     launch_region: str = ""
+    store_url: str = ""  # GP 默认填充的商店 URL(或用户手填)
     # === info 字段(/info 命令会读取,master 表里有对应列才会被写入)===
     class_name: str = ""
     privacy_policy: str = ""
@@ -605,6 +606,7 @@ async def post_project(request: Request, body: NewProjectBody):
         "project_name": body.project_name.strip(),
         "package_name": body.package_name.strip(),
         "launch_region": body.launch_region.strip(),
+        "store_url": body.store_url.strip(),
         # === info 字段(空字符串也会被写入对应列,append_row 通过 HeaderDetector 跳过缺失列)===
         "class_name": body.class_name.strip(),
         "privacy_policy": body.privacy_policy.strip(),

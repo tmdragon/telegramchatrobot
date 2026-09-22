@@ -184,3 +184,34 @@ def test_post_project_without_info_fields_still_works():
     assert values.get("sha256", "") == ""
     assert values.get("privacy_policy", "") == ""
     assert values.get("hash_value", "") == ""
+
+
+def test_post_project_accepts_store_url():
+    """POST /api/projects 应该接受 store_url(GP checkbox 默认填充的 URL)。"""
+    sheet_repo = MagicMock()
+    sheet_repo.find_row_by_project_id.return_value = None
+    sheet_repo.fetch_all.return_value = []
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [MagicMock(id="ss1", name="项目主表", role="master")]
+    store = MagicMock()
+    mapping_repo = MagicMock()
+    from src.web.app import create_app
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {
+        "project_id": "WW-800",
+        "project_name": "WW App",
+        "package_name": "com.ww.app",
+        "store_url": "https://play.google.com/store/apps/details?id=com.ww.app",
+    }
+    r = client.post("/api/projects", json=body)
+    assert r.status_code == 200
+    sheet_repo.append_row.assert_called_once()
+    call_args = sheet_repo.append_row.call_args
+    values = call_args[0][2] if len(call_args[0]) >= 3 else call_args.kwargs["values"]
+    assert values["store_url"] == "https://play.google.com/store/apps/details?id=com.ww.app"

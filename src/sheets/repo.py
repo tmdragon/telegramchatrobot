@@ -273,6 +273,7 @@ class SheetRepo:
             "project_name": PROJECT_NAME_CANDIDATES,
             "package_name": PACKAGE_NAME_CANDIDATES,
             "launch_region": LAUNCH_REGION_CANDIDATES,
+            "store_url": STORE_URL_CANDIDATES,
             # === info 字段(新增项目表单可用,/info 命令也用)===
             "class_name": CLASS_NAME_CANDIDATES,
             "privacy_policy": PRIVACY_POLICY_CANDIDATES,

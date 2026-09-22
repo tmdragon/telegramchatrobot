@@ -52,6 +52,22 @@
         </div>
         <hr class="form-divider">
         <div class="form-section">
+          <div class="form-section__title">📦 A包信息</div>
+          <div class="form-row form-row--checkbox">
+            <label>
+              <input type="checkbox" id="np-gp-target">
+              <span>上架 GP（Google Play）</span>
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="form-row__label" for="np-store-url">商店地址</label>
+            <input id="np-store-url" name="store_url" type="url"
+                   placeholder="勾选 GP 时自动填充,可手动覆盖"
+                   autocomplete="off">
+          </div>
+        </div>
+        <hr class="form-divider">
+        <div class="form-section">
           <div class="form-section__title">
             📋 应用商店投放参数 <span class="form-section__hint">（按 master 表头自动加载）</span>
           </div>
