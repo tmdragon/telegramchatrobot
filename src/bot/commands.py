@@ -368,14 +368,14 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # 3) 渲染(对齐:用户给的格式里,"包       名" 中间 7 空格,对应 "项目编号" 4 字符 → 间距匹配 4 字符)
     # SHA-256: 用 ":" 后无空格,跟其他 label 后 ":" 不一致(用户原样)
     labels = [
-        ("项目编号", found["project_id"]),
-        ("包       名", found["package_name"]),
-        ("类       名", found["class_name"]),
-        ("SHA-1    ", found["sha1"]),
+        ("项目编号:", found["project_id"]),
+        ("包       名:", found["package_name"]),
+        ("类       名:", found["class_name"]),
+        ("SHA-1    :", found["sha1"]),
         ("SHA-256:", found["sha256"]),
-        ("hash值   ", found["hash_value"]),
-        ("隐私政策", found["privacy_policy"]),
-        ("投放地址", found["store_url"]),
+        ("hash值   :", found["hash_value"]),
+        ("隐私政策:", found["privacy_policy"]),
+        ("投放地址:", found["store_url"]),
     ]
     sep = "--------------------" + f"{p.project_id}项目投放信息如下" + "--------------------"
     footer = "----------------------------------------------------------"
