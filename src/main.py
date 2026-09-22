@@ -51,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # 把首次拉到的项目灌进 cache（UI 立即可见，无需等 background refresher）
     cache.replace(projects)
+    # 从 project_state 表恢复 status_changed_at,避免重启后 dwell_seconds 归零。
+    # (BackgroundRefresher 也会调,但要等下一个 refresh tick 才生效,期间 UI 显示 0)
+    store.hydrate_project_state(projects)
 
     # 持久化 sheet 快照（Phase 1 简化：把整个 Project 序列化为快照）
     from datetime import datetime, timezone

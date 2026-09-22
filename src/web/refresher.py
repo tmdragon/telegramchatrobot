@@ -56,58 +56,11 @@ class BackgroundRefresher:
         )
 
     def _hydrate_status_changed_at(self, projects: list[Project]) -> None:
-        """用持久化的 project_state 覆盖 Project.status_changed_at / payment_changed_at。
+        """已迁移到 Store.hydrate_project_state。这里保留空方法以兼容旧调用方。
 
-        SheetRepo.fetch_all 每次 rebuild dict 都把 status_changed_at 重写为
-        fetched_at（"首次见到"启发式），导致跨 refresh / 跨重启都丢失原始时间。
-        用 SQLite 里的 project_state 表覆盖：
-        - 项目无记录（首次见到）→ 用 fetch_all 给的时间，并写库
-        - 状态码未变 → 用库里记录的 status_changed_at（持久时间）
-        - 状态码变了 → 用新时间，并更新库
-        同逻辑应用于 payment_status / payment_changed_at。
+        推荐直接调 store.hydrate_project_state(projects)。
         """
-        for p in projects:
-            prev = self.store.get_project_state(p.project_id)
-            status_changed = False
-            payment_changed = False
-
-            # status 维度
-            if p.status is not None:
-                if prev is None:
-                    self.store.upsert_project_state(
-                        p.project_id, p.status.value, p.status_changed_at
-                    )
-                elif prev[0] != p.status.value:
-                    self.store.upsert_project_state(
-                        p.project_id, p.status.value, p.status_changed_at
-                    )
-                else:
-                    p.status_changed_at = prev[1]
-            # store_url 不变就不管（只有首次见到时持久化）
-
-            # payment 维度（独立于 status）
-            if p.payment_status is not None:
-                prev_pay_code = prev[2] if prev else None
-                prev_pay_at = prev[3] if prev else None
-                if prev is None:
-                    self.store.upsert_project_state(
-                        p.project_id,
-                        status_code=(prev[0] if prev else ""),
-                        status_changed_at=(prev[1] if prev else p.status_changed_at or p.payment_changed_at),
-                        payment_code=p.payment_status.value,
-                        payment_changed_at=p.payment_changed_at,
-                    )
-                elif prev_pay_code != p.payment_status.value:
-                    # 支付状态变了 → 更新 payment_changed_at
-                    self.store.upsert_project_state(
-                        p.project_id,
-                        status_code=prev[0],
-                        status_changed_at=prev[1] or p.status_changed_at,
-                        payment_code=p.payment_status.value,
-                        payment_changed_at=p.payment_changed_at,
-                    )
-                else:
-                    p.payment_changed_at = prev_pay_at
+        self.store.hydrate_project_state(projects)
 
     async def refresh_now(
         self, spreadsheet_names: Optional[list[str]] = None

@@ -262,3 +262,60 @@ class Store:
                 ),
             )
             conn.commit()
+
+    def hydrate_project_state(self, projects) -> None:
+        """根据 project_state 表覆盖 Project.status_changed_at / payment_changed_at。
+
+        SheetRepo.fetch_all 每次 rebuild dict 都把 status_changed_at 重写为
+        fetched_at("首次见到"启发式),导致跨重启丢失原始时间。
+
+        规则(对每个 project):
+        - 项目无 DB 记录 → 用 fetch_all 给的时间,并写入 DB
+        - 状态码未变 → 用库里记录的 status_changed_at(关键：重启后 dwell 不归零)
+        - 状态码变了 → 用 fetch_all 给的新时间,并更新 DB
+        payment 维度同逻辑。
+
+        Args:
+            projects: SheetRepo.fetch_all() 返回的 Project 列表。会被就地修改。
+        """
+        from src.models.project import Project  # 避免循环 import
+
+        for p in projects:
+            prev = self.get_project_state(p.project_id)
+
+            # status 维度
+            if p.status is not None:
+                if prev is None:
+                    self.upsert_project_state(
+                        p.project_id, p.status.value, p.status_changed_at
+                    )
+                elif prev[0] != p.status.value:
+                    self.upsert_project_state(
+                        p.project_id, p.status.value, p.status_changed_at
+                    )
+                else:
+                    # 状态码未变 → 用 DB 里持久的时间戳
+                    p.status_changed_at = prev[1]
+
+            # payment 维度(独立于 status)
+            if p.payment_status is not None:
+                prev_pay_code = prev[2] if prev else None
+                prev_pay_at = prev[3] if prev else None
+                if prev is None:
+                    self.upsert_project_state(
+                        p.project_id,
+                        status_code=(prev[0] if prev else ""),
+                        status_changed_at=(prev[1] if prev else p.status_changed_at or p.payment_changed_at),
+                        payment_code=p.payment_status.value,
+                        payment_changed_at=p.payment_changed_at,
+                    )
+                elif prev_pay_code != p.payment_status.value:
+                    self.upsert_project_state(
+                        p.project_id,
+                        status_code=prev[0],
+                        status_changed_at=prev[1] or p.status_changed_at,
+                        payment_code=p.payment_status.value,
+                        payment_changed_at=p.payment_changed_at,
+                    )
+                else:
+                    p.payment_changed_at = prev_pay_at
