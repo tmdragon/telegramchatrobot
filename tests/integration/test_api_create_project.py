@@ -314,3 +314,68 @@ def test_get_statuses_returns_all_codes_with_aliases():
     # ORDERED 应该含 "已下单"(我们刚改的默认)
     ordered = next(s for s in body["statuses"] if s["code"] == "ORDERED")
     assert "已下单" in ordered["aliases"]
+
+
+def test_put_field_broadcasts_on_status_change():
+    """PUT /fields 改状态列时,如果状态变了,要触发 broadcast_svc.broadcast_project。
+
+    之前 PUT 只更新 cache + 记录 status_history,不播报。
+    现在跟 post_refresh 流程对齐:状态变更 → 立即播报。
+    """
+    from datetime import datetime, timezone
+    from src.models.project import Field, Project, SheetView
+    from src.models.status import StatusCode
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+
+    p = Project(
+        project_id="TEST-001",
+        project_name="测试",
+        status=StatusCode.MAKING,
+        status_changed_at=datetime(2026, 9, 22, tzinfo=timezone.utc),
+        sheets=[
+            SheetView(
+                spreadsheet_id="1REAL_SS_ID",
+                sheet_name="工作表1",
+                fields=[
+                    Field(name="项目编号", value="TEST-001", column_index=1, row_index=2, recognized_as="project_id"),
+                    Field(name="状态", value="我方制作中", column_index=2, row_index=2, recognized_as="status"),
+                ],
+                fetched_at=datetime(2026, 9, 22, tzinfo=timezone.utc),
+            ),
+        ],
+    )
+
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    sheet_repo.update_cell.return_value = "对方验收中"  # 模拟写入成功
+    mapping_repo = MagicMock()
+    broadcast_svc = MagicMock()
+    broadcast_svc.broadcast_project = AsyncMock()
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    cache.replace([p])
+    app.state.cache = cache
+    app.state.broadcast_svc = broadcast_svc
+    client = TestClient(app)
+
+    # field_id: {spreadsheet_id}::{sheet_name}::{row}::{col}
+    # 状态列 col=2 row=2
+    from urllib.parse import quote
+    field_id = quote("1REAL_SS_ID::工作表1::2::2")
+    r = client.put(
+        f"/api/projects/TEST-001/fields/{field_id}",
+        json={"new_value": "对方验收中"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status_changed"] is True
+    assert body["new_status_code"] == "CLIENT_REVIEW"
+    # broadcast 应该被触发
+    broadcast_svc.broadcast_project.assert_awaited_once()

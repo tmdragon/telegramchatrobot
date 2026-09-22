@@ -364,12 +364,25 @@ async def put_field(request: Request, project_id: str, field_id: str, body: Fiel
             p.status_changed_at = now
             status_changed = True
 
+    # 状态变更 → 立即播报(跟 post_refresh 流程对齐;
+    # 之前 PUT 不触发播报是因为 inline edit 一直 502 失败没人发现这个 gap)
+    broadcast_triggered = False
+    if status_changed:
+        broadcast_svc = getattr(app.state, "broadcast_svc", None)
+        if broadcast_svc is not None:
+            try:
+                await broadcast_svc.broadcast_project(p)
+                broadcast_triggered = True
+            except Exception:  # noqa: BLE001
+                log.exception("broadcast after field edit failed (project=%s)", project_id)
+
     return {
         "field_id": field_id,
         "value": verified,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "status_changed": status_changed,
         "new_status_code": new_status_code.value if new_status_code else None,
+        "broadcast_triggered": broadcast_triggered,
     }
 
 
