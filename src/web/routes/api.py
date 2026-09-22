@@ -560,7 +560,7 @@ async def post_project(request: Request, body: NewProjectBody):
 
     流程:
     1. 校验 project_id 唯一(cache + sheet 都查)
-    2. 在 master spreadsheet append 新行,默认状态"对方下单"
+    2. 在 master spreadsheet append 新行,默认状态"已下单"
     3. 若 body.mapping 提供,在 mapping sheet upsert(enabled=True)
     4. 重新拉整个 sheet 更新 cache(确保一致性)
     5. 返回新项目 id
@@ -607,7 +607,7 @@ async def post_project(request: Request, body: NewProjectBody):
     # 2. 写 sheet
     values = {
         "project_id": pid,
-        "status": "对方下单",  # 固定默认
+        "status": "已下单",  # 固定默认
         "project_name": body.project_name.strip(),
         "package_name": body.package_name.strip(),
         "launch_region": body.launch_region.strip(),
@@ -658,6 +658,6 @@ async def post_project(request: Request, body: NewProjectBody):
     return {
         "ok": True,
         "project_id": pid,
-        "status": "对方下单",
+        "status": "已下单",
         "mapping_chat_id": body.mapping.chat_id if body.mapping else None,
     }

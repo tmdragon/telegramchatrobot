@@ -595,6 +595,11 @@ a:hover { text-decoration: underline; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--s-2) var(--s-3);
+  /* 段落视觉:浅色背景 + 圆角边框,跟 form-row 区分 */
+  padding: var(--s-3);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--r-md);
 }
 /* grid gap 取代原 form-row / form-divider 的 margin */
 #new-project-form .form-row,
@@ -605,17 +610,40 @@ a:hover { text-decoration: underline; }
 #new-project-form .form-section__title { margin-bottom: 0; }
 /* 紧凑化 modal 内 input / label / row 的尺寸 */
 #new-project-form .form-row { gap: 2px; }
-#new-project-form .form-row__label { font-size: 12px; }
+#new-project-form .form-row__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+}
 #new-project-form .form-row input,
 #new-project-form .form-row select {
   padding: 4px 8px;
   font-size: 13px;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
+/* input focus 加蓝色光晕,更明显 */
+#new-project-form .form-row input:focus,
+#new-project-form .form-row select:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px rgba(9,105,218,0.15);
+}
+/* 段落标题:左侧色块 + 软色背景,跟模块名一致 */
 #new-project-form .form-section__title {
   font-size: 12px;
   font-weight: 600;
-  padding-bottom: 2px;
-  border-bottom: 1px dashed var(--c-border-soft);
+  color: var(--c-primary);
+  padding: 4px 8px;
+  background: var(--c-primary-soft);
+  border-left: 3px solid var(--c-primary);
+  border-radius: var(--r-sm);
+  display: inline-block;  /* 不撑满整行,看起来像 chip */
+  align-self: start;     /* grid 中左对齐 */
+}
+/* 分隔线:更细更淡 */
+#new-project-form .form-divider {
+  border-top: 1px dashed var(--c-border-soft);
+  margin: var(--s-1) 0;
 }
 /* info_fields / mapping_fields 也是 2 列 */
 #new-project-form .form-info-fields {
@@ -632,6 +660,22 @@ a:hover { text-decoration: underline; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--s-2) var(--s-3);
+}
+/* 操作按钮:sticky 在底部,内容滚动时按钮始终可见 */
+#new-project-form .modal__actions {
+  position: sticky;
+  bottom: calc(-1 * var(--s-4));  /* 抵消 panel padding,贴底 */
+  background: var(--c-surface);
+  padding: var(--s-3) 0 0;
+  margin: var(--s-3) calc(-1 * var(--s-4)) calc(-1 * var(--s-4));  /* 拉满宽度 */
+  border-top: 1px solid var(--c-border);
+  box-shadow: 0 -4px 12px rgba(31,35,40,0.05);
+  z-index: 1;
+}
+/* 保存按钮更显眼 */
+#new-project-form .modal__actions .btn--primary {
+  padding: 6px 20px;
+  font-weight: 600;
 }
 /* 小屏(< 640px)回落到单列,免得挤压 */
 @media (max-width: 640px) {
