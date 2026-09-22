@@ -24,11 +24,14 @@ LAUNCH_REGION_CANDIDATES = ["上架地区", "发布地区", "地区", "Region", 
 PAYMENT_CANDIDATES = ["回款", "支付", "付款", "Payment", "payment", "Paid", "PAY"]
 
 # === 用于 /info 命令（app store 投放参数）===
-CLASS_NAME_CANDIDATES = ["主activity类名", "类名", "Activity 类名", "activity_class", "MainActivity"]
+CLASS_NAME_CANDIDATES = ["主activity类名", "主activity 的类名", "类名",
+                      "Activity 类名", "activity_class", "MainActivity"]
 PRIVACY_POLICY_CANDIDATES = ["隐私政策", "Privacy Policy", "privacy_url", "隐私链接"]
 SHA1_CANDIDATES = ["SHA-1", "sha-1", "SHA1", "sha1"]
-SHA256_CANDIDATES = ["SHA-256", "sha-256", "SHA256", "sha256"]
-HASH_CANDIDATES = ["hash值", "hash", "哈希值", "Hash"]
+SHA256_CANDIDATES = ["SHA-256", "sha-256", "SHA256", "sha256",
+                     "SHA-2", "sha-2",  # 常见简写(用户 sheet 实测)
+                     "SHA256-1", "sha256-1"]
+HASH_CANDIDATES = ["hash值", "hash", "哈希值", "Hash", "HASH"]
 
 
 class HeaderDetector:

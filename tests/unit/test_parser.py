@@ -40,6 +40,30 @@ def test_hash_candidates_match_user_columns():
     assert "hash值" in HASH_CANDIDATES
 
 
+def test_class_name_candidates_include_user_sheet_name():
+    """'主activity 的类名'(中间有空格)应该被识别。"""
+    assert "主activity 的类名" in CLASS_NAME_CANDIDATES
+
+
+def test_sha256_candidates_include_short_form():
+    """'SHA-2'(没有 56) 是用户 sheet 实测写法。"""
+    assert "SHA-2" in SHA256_CANDIDATES
+    assert "sha-2" in SHA256_CANDIDATES
+
+
+def test_hash_candidates_include_uppercase():
+    """'HASH' 全大写也要识别。"""
+    assert "HASH" in HASH_CANDIDATES
+
+
+def test_detects_user_sheet_column_names():
+    """集成:用户 sheet 实际写法都能命中。"""
+    h = HeaderDetector(["项目编号", "主activity 的类名", "SHA-2", "HASH"])
+    assert h.find_column(CLASS_NAME_CANDIDATES) == 2
+    assert h.find_column(SHA256_CANDIDATES) == 3
+    assert h.find_column(HASH_CANDIDATES) == 4
+
+
 # HeaderDetector 基础功能(已有常量)
 def test_detects_known_columns_existing():
     """回归:现有常量识别仍然正确。"""
