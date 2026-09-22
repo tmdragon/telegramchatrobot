@@ -572,14 +572,15 @@ a:hover { text-decoration: underline; }
  * 分隔线 / 段落标题 / 勾选框 / 操作按钮 仍然占满整行。
  */
 .modal__panel--wide {
-  max-width: 760px;
-  max-height: 90vh;
+  max-width: 800px;
+  max-height: 92vh;
   overflow-y: auto;
+  padding: var(--s-4);  /* 比默认 s-5 稍紧,省垂直空间 */
 }
 #new-project-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--s-3) var(--s-3);
+  gap: var(--s-2) var(--s-3);  /* 行间距 8px,列间距 12px */
 }
 /* 全宽元素(跨 2 列) */
 #new-project-form .form-divider,
@@ -593,7 +594,7 @@ a:hover { text-decoration: underline; }
 #new-project-form .form-section {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--s-3) var(--s-3);
+  gap: var(--s-2) var(--s-3);
 }
 /* grid gap 取代原 form-row / form-divider 的 margin */
 #new-project-form .form-row,
@@ -602,18 +603,35 @@ a:hover { text-decoration: underline; }
 }
 #new-project-form .form-divider { margin: 0; }
 #new-project-form .form-section__title { margin-bottom: 0; }
+/* 紧凑化 modal 内 input / label / row 的尺寸 */
+#new-project-form .form-row { gap: 2px; }
+#new-project-form .form-row__label { font-size: 12px; }
+#new-project-form .form-row input,
+#new-project-form .form-row select {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+#new-project-form .form-section__title {
+  font-size: 12px;
+  font-weight: 600;
+  padding-bottom: 2px;
+  border-bottom: 1px dashed var(--c-border-soft);
+}
 /* info_fields / mapping_fields 也是 2 列 */
 #new-project-form .form-info-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--s-3) var(--s-3);
+  gap: var(--s-2) var(--s-3);
 }
 #new-project-form .form-info-fields__loading,
-#new-project-form .form-info-fields__empty { grid-column: 1 / -1; }
+#new-project-form .form-info-fields__empty {
+  grid-column: 1 / -1;
+  font-size: 11px;
+}
 #np-mapping-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--s-3) var(--s-3);
+  gap: var(--s-2) var(--s-3);
 }
 /* 小屏(< 640px)回落到单列,免得挤压 */
 @media (max-width: 640px) {
