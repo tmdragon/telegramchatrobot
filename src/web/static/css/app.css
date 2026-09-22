@@ -566,6 +566,64 @@ a:hover { text-decoration: underline; }
   padding: 4px 0;
   font-style: italic;
 }
+
+/* ===== Form: 新增项目 modal 的 2 列布局 =====
+ * 字段多了单列会超出屏幕;用 CSS Grid 把表单改成 2 列。
+ * 分隔线 / 段落标题 / 勾选框 / 操作按钮 仍然占满整行。
+ */
+.modal__panel--wide {
+  max-width: 760px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+#new-project-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3) var(--s-3);
+}
+/* 全宽元素(跨 2 列) */
+#new-project-form .form-divider,
+#new-project-form .form-section,
+#new-project-form .modal__actions,
+#new-project-form .form-section__title,
+#new-project-form .form-row--checkbox {
+  grid-column: 1 / -1;
+}
+/* 段落内部也用 2 列 grid,让里面的 input 排成 2 列 */
+#new-project-form .form-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3) var(--s-3);
+}
+/* grid gap 取代原 form-row / form-divider 的 margin */
+#new-project-form .form-row,
+#new-project-form .form-section .form-row {
+  margin-bottom: 0;
+}
+#new-project-form .form-divider { margin: 0; }
+#new-project-form .form-section__title { margin-bottom: 0; }
+/* info_fields / mapping_fields 也是 2 列 */
+#new-project-form .form-info-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3) var(--s-3);
+}
+#new-project-form .form-info-fields__loading,
+#new-project-form .form-info-fields__empty { grid-column: 1 / -1; }
+#np-mapping-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3) var(--s-3);
+}
+/* 小屏(< 640px)回落到单列,免得挤压 */
+@media (max-width: 640px) {
+  #new-project-form,
+  #new-project-form .form-section,
+  #new-project-form .form-info-fields,
+  #np-mapping-fields {
+    grid-template-columns: 1fr;
+  }
+}
 .form-error {
   margin-top: var(--s-3);
   padding: 8px 12px;
