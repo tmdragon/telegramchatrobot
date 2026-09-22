@@ -44,6 +44,11 @@ HELP_PUBLIC = (
     "  多个匹配 → 列出候选项目，让你用编号精确查：\n"
     "  `🔍 多个匹配 \`<查询>\`，请用编号：`\n"
     "  `  • \`PRJ-001\` 项目一 包名 \`com.example.game1\``\n\n"
+    "*📦 `/info <查询>`*\n"
+    "获取 app store 投放所需参数(类名/SHA/隐私政策/商店地址 等)。\n"
+    "  `/info PRJ-001` — 按编号\n"
+    "  `/info bmw` — 按包名模糊查\n"
+    "  任何字段缺失会列出缺失项名称。\n\n"
     "*📞 联系管理员*\n"
     "遇到问题或需新指令，找管理员（机器人不报错就算正常）\n\n"
     "*❓ `/help`*\n"
@@ -288,6 +293,98 @@ async def _record_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # 不回消息，避免打扰
 
 
+async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/info [项目编号或包名片段] — 返回 app store 投放所需字段(类名/SHA/隐私政策/商店地址 等)。
+
+    模糊匹配:精确 project_id 优先;否则按 project_id / package_name 包含子串匹配。
+    多匹配 → 列出候选。多匹配时不会泄露字段(避免发错对象)。
+    任何人可用(not admin-only),客户群里方便投放部署时取参数。
+    """
+    cache: ProjectCache = context.bot_data["cache"]
+    args = context.args or []
+    if not args:
+        await _reply(
+            update,
+            "用法:\n"
+            "`/info PRJ-XXX` — 按项目编号精确查\n"
+            "`/info <包名片段>` — 按包名模糊查(如 `bmw`)",
+        )
+        return
+    query = args[0].strip()
+
+    # 1) 精确按 project_id
+    p = cache.get(query)
+    if p is None:
+        q_lower = query.lower()
+        candidates = []
+        for proj in cache.list_projects():
+            pid = (proj.project_id or "").lower()
+            pkg = (proj.package_name or "").lower()
+            if q_lower in pid or q_lower in pkg:
+                candidates.append(proj)
+        if len(candidates) == 1:
+            p = candidates[0]
+        elif len(candidates) > 1:
+            lines = [f"🔍 多个匹配 `{query}`，请用编号："]
+            for c in candidates[:10]:
+                lines.append(f"  • `{c.project_id}` {c.project_name or '（未命名）'} 包名 `{c.package_name or '—'}`")
+            await _reply(update, "\n".join(lines))
+            return
+        else:
+            await _reply(update, f"❓ 未找到 `{query}`（按编号、包名都查过）")
+            return
+
+    # 2) 提取字段(从 sheets[*].fields[*].recognized_as 找)
+    # 每个 recognized_as 取第一个非空值
+    found: dict[str, str] = {}
+    for sv in p.sheets:
+        for f in sv.fields:
+            if f.recognized_as and f.value and f.recognized_as not in found:
+                found[f.recognized_as] = str(f.value).strip()
+
+    # 期望字段(显示用中文标签)
+    expected = [
+        ("project_id", "项目编号"),
+        ("package_name", "包名"),
+        ("class_name", "类名"),
+        ("sha1", "SHA-1"),
+        ("sha256", "SHA-256"),
+        ("hash_value", "hash值"),
+        ("privacy_policy", "隐私政策"),
+        ("store_url", "投放地址"),
+    ]
+    missing = [(key, label) for key, label in expected if key not in found or not found[key]]
+
+    if missing:
+        missing_labels = ", ".join(label for _, label in missing)
+        await _reply(
+            update,
+            f"{p.project_id} 项目投放信息提取失败\n"
+            f"缺失 {missing_labels} 信息，请补充",
+        )
+        return
+
+    # 3) 渲染(对齐:用户给的格式里,"包       名" 中间 7 空格,对应 "项目编号" 4 字符 → 间距匹配 4 字符)
+    # SHA-256: 用 ":" 后无空格,跟其他 label 后 ":" 不一致(用户原样)
+    labels = [
+        ("项目编号", found["project_id"]),
+        ("包       名", found["package_name"]),
+        ("类       名", found["class_name"]),
+        ("SHA-1    ", found["sha1"]),
+        ("SHA-256:", found["sha256"]),
+        ("hash值   ", found["hash_value"]),
+        ("隐私政策", found["privacy_policy"]),
+        ("投放地址", found["store_url"]),
+    ]
+    sep = "--------------------" + f"{p.project_id}项目投放信息如下" + "--------------------"
+    footer = "----------------------------------------------------------"
+    lines = [sep]
+    for key, value in labels:
+        lines.append(f"{key}{value}")
+    lines.append(footer)
+    await _reply(update, "\n".join(lines))
+
+
 def register_handlers(
     app: Any,
     *,
@@ -315,4 +412,5 @@ def register_handlers(
     app.add_handler(CommandHandler("force_broadcast", force_broadcast_cmd))
     app.add_handler(CommandHandler("reload", reload_cmd))
     app.add_handler(CommandHandler("dryrun", dryrun_cmd))
+    app.add_handler(CommandHandler("info", info_cmd))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, _record_user_id))

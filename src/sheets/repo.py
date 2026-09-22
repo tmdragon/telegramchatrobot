@@ -16,12 +16,17 @@ import gspread
 from src.config import SpreadsheetConfig
 from src.models.project import Field, Project, SheetView
 from src.sheets.parser import (
+    CLASS_NAME_CANDIDATES,
     HeaderDetector,
+    HASH_CANDIDATES,
     LAUNCH_REGION_CANDIDATES,
     PACKAGE_NAME_CANDIDATES,
     PAYMENT_CANDIDATES,
+    PRIVACY_POLICY_CANDIDATES,
     PROJECT_ID_CANDIDATES,
     PROJECT_NAME_CANDIDATES,
+    SHA1_CANDIDATES,
+    SHA256_CANDIDATES,
     STATUS_CANDIDATES,
     STORE_URL_CANDIDATES,
     parse_package_name,
@@ -54,6 +59,11 @@ class SheetRepo:
             pay_col = detector.find_column(PAYMENT_CANDIDATES)
             store_col = detector.find_column(STORE_URL_CANDIDATES)
             region_col = detector.find_column(LAUNCH_REGION_CANDIDATES)
+            class_name_col = detector.find_column(CLASS_NAME_CANDIDATES)
+            privacy_col = detector.find_column(PRIVACY_POLICY_CANDIDATES)
+            sha1_col = detector.find_column(SHA1_CANDIDATES)
+            sha256_col = detector.find_column(SHA256_CANDIDATES)
+            hash_col = detector.find_column(HASH_CANDIDATES)
 
             if pid_col is None:
                 continue  # 此表无项目编号列，跳过
@@ -84,6 +94,16 @@ class SheetRepo:
                         recognized = "store_url"
                     elif region_col is not None and col_idx == region_col:
                         recognized = "launch_region"
+                    elif class_name_col is not None and col_idx == class_name_col:
+                        recognized = "class_name"
+                    elif privacy_col is not None and col_idx == privacy_col:
+                        recognized = "privacy_policy"
+                    elif sha1_col is not None and col_idx == sha1_col:
+                        recognized = "sha1"
+                    elif sha256_col is not None and col_idx == sha256_col:
+                        recognized = "sha256"
+                    elif hash_col is not None and col_idx == hash_col:
+                        recognized = "hash_value"
                     fields.append(Field(
                         name=header,
                         value=value,
