@@ -303,11 +303,12 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     cache: ProjectCache = context.bot_data["cache"]
     args = context.args or []
     if not args:
-        await _reply(
+        # 纯文本:去掉 Markdown 反引号(否则用户会看到字面的 ` 字符)
+        await _reply_plain(
             update,
             "用法:\n"
-            "`/info PRJ-XXX` — 按项目编号精确查\n"
-            "`/info <包名片段>` — 按包名模糊查(如 `bmw`)",
+            "/info PRJ-XXX — 按项目编号精确查\n"
+            "/info <包名片段> — 按包名模糊查(如 bmw)",
         )
         return
     query = args[0].strip()
@@ -325,13 +326,13 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if len(candidates) == 1:
             p = candidates[0]
         elif len(candidates) > 1:
-            lines = [f"🔍 多个匹配 `{query}`，请用编号："]
+            lines = [f"🔍 多个匹配 {query}，请用编号："]
             for c in candidates[:10]:
-                lines.append(f"  • `{c.project_id}` {c.project_name or '（未命名）'} 包名 `{c.package_name or '—'}`")
-            await _reply(update, "\n".join(lines))
+                lines.append(f"  • {c.project_id} {c.project_name or '（未命名）'} 包名 {c.package_name or '—'}")
+            await _reply_plain(update, "\n".join(lines))
             return
         else:
-            await _reply(update, f"❓ 未找到 `{query}`（按编号、包名都查过）")
+            await _reply_plain(update, f"❓ 未找到 {query}（按编号、包名都查过）")
             return
 
     # 2) 提取字段(从 sheets[*].fields[*].recognized_as 找)
@@ -357,7 +358,7 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if missing:
         missing_labels = ", ".join(label for _, label in missing)
-        await _reply(
+        await _reply_plain(
             update,
             f"{p.project_id} 项目投放信息提取失败\n"
             f"缺失 {missing_labels} 信息，请补充",
@@ -382,7 +383,10 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     for key, value in labels:
         lines.append(f"{key}{value}")
     lines.append(footer)
-    await _reply(update, "\n".join(lines))
+    # 用 _reply_plain(纯文本)而不是 _reply(MarkdownV2)
+    # 因为字段值里的 . (在 SHA-1: A1:83:FC:CE:B0:...) 是 MarkdownV2 保留字符,
+    # 会让 parse_mode 解析失败导致消息发不出去。
+    await _reply_plain(update, "\n".join(lines))
 
 
 def register_handlers(

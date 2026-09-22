@@ -71,7 +71,7 @@ async def test_info_full_match_all_fields_present():
     ctx = _make_context(cache)
     ctx.args = ["WW-001"]
 
-    with patch("src.bot.commands._reply", new=AsyncMock()) as mock_reply:
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
         await info_cmd(update, ctx)
 
     mock_reply.assert_called_once()
@@ -109,7 +109,7 @@ async def test_info_missing_fields_returns_error():
     ctx = _make_context(cache)
     ctx.args = ["WW-002"]
 
-    with patch("src.bot.commands._reply", new=AsyncMock()) as mock_reply:
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
         await info_cmd(update, ctx)
 
     text = mock_reply.call_args[0][1]
@@ -137,7 +137,7 @@ async def test_info_no_match_returns_error():
     ctx = _make_context(cache)
     ctx.args = ["NOPE-999"]
 
-    with patch("src.bot.commands._reply", new=AsyncMock()) as mock_reply:
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
         await info_cmd(update, ctx)
 
     text = mock_reply.call_args[0][1]
@@ -160,7 +160,7 @@ async def test_info_multiple_matches_returns_candidates():
     ctx = _make_context(cache)
     ctx.args = ["WW"]
 
-    with patch("src.bot.commands._reply", new=AsyncMock()) as mock_reply:
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
         await info_cmd(update, ctx)
 
     text = mock_reply.call_args[0][1]
@@ -194,7 +194,7 @@ async def test_info_lookup_by_package_name_fuzzy():
     ctx = _make_context(cache)
     ctx.args = ["neuesSpiel"]
 
-    with patch("src.bot.commands._reply", new=AsyncMock()) as mock_reply:
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
         await info_cmd(update, ctx)
 
     text = mock_reply.call_args[0][1]
@@ -211,7 +211,7 @@ async def test_info_no_args_shows_usage():
     ctx = _make_context(MagicMock())
     ctx.args = []
 
-    with patch("src.bot.commands._reply", new=AsyncMock()) as mock_reply:
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
         await info_cmd(update, ctx)
 
     text = mock_reply.call_args[0][1]
