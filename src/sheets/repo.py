@@ -16,10 +16,14 @@ import gspread
 from src.config import SpreadsheetConfig
 from src.models.project import Field, Project, SheetView
 from src.sheets.parser import (
+    ADJUST_KEY_CANDIDATES,
+    A_PACKAGE_CANDIDATES,
+    B_ENTRY_NAME_CANDIDATES,
     CLASS_NAME_CANDIDATES,
     HeaderDetector,
     HASH_CANDIDATES,
     LAUNCH_REGION_CANDIDATES,
+    OPEN_SERVICE_URL_CANDIDATES,
     PACKAGE_NAME_CANDIDATES,
     PAYMENT_CANDIDATES,
     PRIVACY_POLICY_CANDIDATES,
@@ -274,6 +278,11 @@ class SheetRepo:
             "package_name": PACKAGE_NAME_CANDIDATES,
             "launch_region": LAUNCH_REGION_CANDIDATES,
             "store_url": STORE_URL_CANDIDATES,
+            # === WW 项目新增字段(基础输入,总是出现在表单)===
+            "open_service_url": OPEN_SERVICE_URL_CANDIDATES,
+            "adjust_key": ADJUST_KEY_CANDIDATES,
+            "b_entry_name": B_ENTRY_NAME_CANDIDATES,
+            "a_package": A_PACKAGE_CANDIDATES,
             # === info 字段(新增项目表单可用,/info 命令也用)===
             "class_name": CLASS_NAME_CANDIDATES,
             "privacy_policy": PRIVACY_POLICY_CANDIDATES,

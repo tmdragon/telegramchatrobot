@@ -215,3 +215,39 @@ def test_post_project_accepts_store_url():
     call_args = sheet_repo.append_row.call_args
     values = call_args[0][2] if len(call_args[0]) >= 3 else call_args.kwargs["values"]
     assert values["store_url"] == "https://play.google.com/store/apps/details?id=com.ww.app"
+
+def test_post_project_accepts_ww_extra_fields():
+    """POST /api/projects 应该接受 WW 项目特有的基础字段(开关服地址/ADJUST KEY/B 入口名称/A包)。"""
+    sheet_repo = MagicMock()
+    sheet_repo.find_row_by_project_id.return_value = None
+    sheet_repo.fetch_all.return_value = []
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [MagicMock(id="ss1", name="项目主表", role="master")]
+    store = MagicMock()
+    mapping_repo = MagicMock()
+    from src.web.app import create_app
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {
+        "project_id": "WW-1000",
+        "project_name": "WW Extra",
+        "package_name": "com.ww.extra",
+        "a_package": "v2",
+        "open_service_url": "https://example.com/activate",
+        "adjust_key": "tk_xyz",
+        "b_entry_name": "B-Entry-Default",
+    }
+    r = client.post("/api/projects", json=body)
+    assert r.status_code == 200
+    sheet_repo.append_row.assert_called_once()
+    call_args = sheet_repo.append_row.call_args
+    values = call_args[0][2] if len(call_args[0]) >= 3 else call_args.kwargs["values"]
+    assert values["a_package"] == "v2"
+    assert values["open_service_url"] == "https://example.com/activate"
+    assert values["adjust_key"] == "tk_xyz"
+    assert values["b_entry_name"] == "B-Entry-Default"

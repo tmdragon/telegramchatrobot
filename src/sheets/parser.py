@@ -33,6 +33,16 @@ SHA256_CANDIDATES = ["SHA-256", "sha-256", "SHA256", "sha256",
                      "SHA256-1", "sha256-1"]
 HASH_CANDIDATES = ["hash值", "hash", "哈希值", "Hash", "HASH"]
 
+# === WW 项目新增字段 ===
+# 开关服地址:游戏激活/开关服接口 URL(与商店 URL 不同,刻意分开)
+OPEN_SERVICE_URL_CANDIDATES = ["开关服地址", "开关服 URL", "开关服链接", "Activation URL"]
+# ADJUST KEY:广告/统计平台 key
+ADJUST_KEY_CANDIDATES = ["ADJUST KEY", "ADJUST_KEY", "Adjust Key", "adjust_key", "AdjustKey"]
+# B 入口名称:多入口分发时的 B 入口标识
+B_ENTRY_NAME_CANDIDATES = ["B 入口名称", "B入口", "B entry name", "B_entry_name", "BEntryName"]
+# A包:包版本名(package variant label)
+A_PACKAGE_CANDIDATES = ["A包", "A 包", "A Package", "A_package", "APackage", "package_a"]
+
 
 class HeaderDetector:
     """根据表头行（list[str]）匹配已知字段的列号。"""

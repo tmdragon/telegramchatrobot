@@ -39,6 +39,11 @@
                  placeholder="com.example.app">
         </div>
         <div class="form-row">
+          <label class="form-row__label" for="np-a-package">A包</label>
+          <input id="np-a-package" name="a_package" type="text"
+                 placeholder="包版本名(如 v2 / A)" autocomplete="off">
+        </div>
+        <div class="form-row">
           <label class="form-row__label" for="np-launch-region">上架地区</label>
           <input id="np-launch-region" name="launch_region" type="text"
                  placeholder="India / 中国 / 美国">
@@ -64,6 +69,22 @@
             <input id="np-store-url" name="store_url" type="url"
                    placeholder="勾选 GP 时自动填充,可手动覆盖"
                    autocomplete="off">
+          </div>
+          <div class="form-row">
+            <label class="form-row__label" for="np-open-service-url">开关服地址</label>
+            <input id="np-open-service-url" name="open_service_url" type="url"
+                   placeholder="https://example.com/activate"
+                   autocomplete="off">
+          </div>
+          <div class="form-row">
+            <label class="form-row__label" for="np-adjust-key">ADJUST KEY</label>
+            <input id="np-adjust-key" name="adjust_key" type="text"
+                   placeholder="广告/统计 key" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <label class="form-row__label" for="np-b-entry-name">B 入口名称</label>
+            <input id="np-b-entry-name" name="b_entry_name" type="text"
+                   placeholder="B-Entry-Default" autocomplete="off">
           </div>
         </div>
         <hr class="form-divider">

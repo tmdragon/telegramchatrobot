@@ -10,6 +10,11 @@ export async function submitNewProject(form, errorEl) {
     package_name: (fd.get("package_name") || "").trim(),
     launch_region: (fd.get("launch_region") || "").trim(),
     store_url: (fd.get("store_url") || "").trim(),
+    // === WW 项目基础字段 ===
+    a_package: (fd.get("a_package") || "").trim(),
+    open_service_url: (fd.get("open_service_url") || "").trim(),
+    adjust_key: (fd.get("adjust_key") || "").trim(),
+    b_entry_name: (fd.get("b_entry_name") || "").trim(),
   };
   // info 字段（从动态渲染的 inputs 收集；空值不发）
   form.querySelectorAll("input[data-info-key]").forEach((el) => {
