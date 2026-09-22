@@ -361,6 +361,9 @@ async def put_field(request: Request, project_id: str, field_id: str, body: Fiel
             now = datetime.now(timezone.utc)
             store.record_status(project_id, new_status_code.value, now)
             p.status = new_status_code
+            # 同时更新 status_raw,否则 render_broadcast 用 status_display_text()
+            # 优先返回 status_raw(原 sheet 文本),播报里会显示老的字符串
+            p.status_raw = verified
             p.status_changed_at = now
             status_changed = True
 

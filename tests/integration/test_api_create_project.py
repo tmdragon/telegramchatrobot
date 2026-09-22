@@ -379,3 +379,6 @@ def test_put_field_broadcasts_on_status_change():
     assert body["new_status_code"] == "CLIENT_REVIEW"
     # broadcast 应该被触发
     broadcast_svc.broadcast_project.assert_awaited_once()
+    # bug fix: status_raw 也必须更新,否则 render_broadcast 用 status_raw 渲染显示老字符串
+    p_after = cache.get("TEST-001")
+    assert p_after.status_raw == "对方验收中"
