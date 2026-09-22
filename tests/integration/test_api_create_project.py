@@ -1,6 +1,28 @@
 """Tests for POST /api/projects + GET /api/groups (新增项目 feature)。"""
 from unittest.mock import MagicMock
 
+from fastapi.testclient import TestClient
+
+from src.web.app import create_app
+from src.web.cache import ProjectCache
+
+
+def _make_app(spreadsheets=None, sheet_repo=None):
+    cfg = MagicMock()
+    cfg.ui_bind = "127.0.0.1"
+    cfg.ui_port = 8765
+    cfg.spreadsheets = spreadsheets if spreadsheets is not None else [
+        MagicMock(id="ss1", name="项目主表", role="master"),
+    ]
+    store = MagicMock()
+    if sheet_repo is None:
+        sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    app = create_app(cfg, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    return TestClient(app), app, cache, sheet_repo
+
 
 def test_get_groups_dedups_by_chat_id():
     """GET /api/groups 从 mapping sheet 提取去重的 (chat_id, 备注) 列表。"""
@@ -63,3 +85,102 @@ def test_unique_groups_disabled_excluded():
     groups = _unique_groups(mappings)
     chat_ids = [g["chat_id"] for g in groups]
     assert chat_ids == ["-100111"]  # disabled 不应出现
+
+
+def test_get_new_form_fields_returns_info_fields():
+    """GET /api/projects/new-form-fields 应该返回 master 表头里识别到的 info 字段列表。"""
+    sheet_repo = MagicMock()
+    sheet_repo.get_info_field_columns.return_value = [
+        {"key": "class_name", "label": "主activity类名", "header": "主activity类名"},
+        {"key": "sha1", "label": "SHA-1", "header": "SHA-1"},
+    ]
+    client, app, cache, sheet_repo_ = _make_app(sheet_repo=sheet_repo)
+    r = client.get("/api/projects/new-form-fields")
+    assert r.status_code == 200
+    body = r.json()
+    assert "info_fields" in body
+    keys = [f["key"] for f in body["info_fields"]]
+    assert "class_name" in keys
+    assert "sha1" in keys
+    sheet_repo.get_info_field_columns.assert_called_once()
+
+
+def test_get_new_form_fields_500_when_no_master():
+    """没有配置 master 时,GET 端点返回 500。"""
+    client, app, cache, sheet_repo = _make_app(spreadsheets=[])
+    r = client.get("/api/projects/new-form-fields")
+    assert r.status_code == 500
+    assert "master" in r.json()["detail"].lower()
+
+
+def test_post_project_accepts_info_fields():
+    """POST /api/projects 应该把 info 字段透传给 SheetRepo.append_row。"""
+    sheet_repo = MagicMock()
+    sheet_repo.find_row_by_project_id.return_value = None  # 不冲突
+    sheet_repo.fetch_all.return_value = []  # refresh 后空
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [MagicMock(id="ss1", name="项目主表", role="master")]
+    cfg_mock.get = lambda key, default=None: getattr(cfg_mock, key, default)
+    store = MagicMock()
+    mapping_repo = MagicMock()
+    from src.web.app import create_app
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {
+        "project_id": "WW-500",
+        "project_name": "WW App",
+        "package_name": "com.ww.app",
+        "launch_region": "India",
+        "class_name": "com.ww.app.MainActivity",
+        "sha1": "A1:83:FC:CE:B0:A2",
+        "sha256": "B5:96:58:56:34:46",
+        "privacy_policy": "https://example.com/privacy",
+        "hash_value": "abc123",
+    }
+    r = client.post("/api/projects", json=body)
+    assert r.status_code == 200
+    # append_row 应该被调用,且 values 里包含所有 info 字段
+    sheet_repo.append_row.assert_called_once()
+    call_args = sheet_repo.append_row.call_args
+    values = call_args[0][2] if len(call_args[0]) >= 3 else call_args.kwargs["values"]
+    assert values["class_name"] == "com.ww.app.MainActivity"
+    assert values["sha1"] == "A1:83:FC:CE:B0:A2"
+    assert values["sha256"] == "B5:96:58:56:34:46"
+    assert values["privacy_policy"] == "https://example.com/privacy"
+    assert values["hash_value"] == "abc123"
+
+
+def test_post_project_without_info_fields_still_works():
+    """不带 info 字段的旧请求应该仍然能成功(向后兼容)。"""
+    sheet_repo = MagicMock()
+    sheet_repo.find_row_by_project_id.return_value = None
+    sheet_repo.fetch_all.return_value = []
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [MagicMock(id="ss1", name="项目主表", role="master")]
+    store = MagicMock()
+    mapping_repo = MagicMock()
+    from src.web.app import create_app
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {"project_id": "WW-600", "project_name": "WW App"}
+    r = client.post("/api/projects", json=body)
+    assert r.status_code == 200
+    sheet_repo.append_row.assert_called_once()
+    call_args = sheet_repo.append_row.call_args
+    values = call_args[0][2] if len(call_args[0]) >= 3 else call_args.kwargs["values"]
+    # 不带 info 字段时,应该全部为空字符串(由 NewProjectBody 默认值提供)
+    assert values.get("class_name", "") == ""
+    assert values.get("sha1", "") == ""
+    assert values.get("sha256", "") == ""
+    assert values.get("privacy_policy", "") == ""
+    assert values.get("hash_value", "") == ""

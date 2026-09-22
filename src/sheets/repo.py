@@ -273,6 +273,12 @@ class SheetRepo:
             "project_name": PROJECT_NAME_CANDIDATES,
             "package_name": PACKAGE_NAME_CANDIDATES,
             "launch_region": LAUNCH_REGION_CANDIDATES,
+            # === info 字段(新增项目表单可用,/info 命令也用)===
+            "class_name": CLASS_NAME_CANDIDATES,
+            "privacy_policy": PRIVACY_POLICY_CANDIDATES,
+            "sha1": SHA1_CANDIDATES,
+            "sha256": SHA256_CANDIDATES,
+            "hash_value": HASH_CANDIDATES,
         }
 
         row_data = [""] * len(headers)
@@ -285,6 +291,41 @@ class SheetRepo:
                 row_data[col_idx - 1] = str(value)
 
         ws.append_row(row_data, value_input_option="USER_ENTERED")
+
+    def get_info_field_columns(
+        self,
+        spreadsheet: SpreadsheetConfig,
+    ) -> list[dict]:
+        """读取 master 表头,返回表里实际存在的 info 字段列表(给前端"新增项目"表单用)。
+
+        每条形如 {"key": "class_name", "label": "主activity类名", "header": "主activity类名"}。
+        - key: 内部字段名(对应 NewProjectBody / append_row 的 values 键)
+        - label: 中文标签(给 UI 表单 input 显示)
+        - header: sheet 里实际的列名(展示用)
+        表里没有的 info 列不会出现在结果中。
+        """
+        sh = self.client.open_by_key(spreadsheet.id)
+        ws = sh.worksheet(spreadsheet.name)
+        headers = ws.row_values(1)
+
+        # info 字段定义(key, 中文 label, 候选列名)
+        info_defs = [
+            ("class_name", "主activity类名", CLASS_NAME_CANDIDATES),
+            ("privacy_policy", "隐私政策", PRIVACY_POLICY_CANDIDATES),
+            ("sha1", "SHA-1", SHA1_CANDIDATES),
+            ("sha256", "SHA-256", SHA256_CANDIDATES),
+            ("hash_value", "hash值", HASH_CANDIDATES),
+        ]
+        detector = HeaderDetector(headers)
+        out: list[dict] = []
+        for key, label, candidates in info_defs:
+            col_idx = detector.find_column(candidates)
+            if col_idx is None:
+                continue
+            # 找到的列索引对应的 header 文本(用于 UI 显示真实列名)
+            header_text = headers[col_idx - 1].strip() if col_idx - 1 < len(headers) else label
+            out.append({"key": key, "label": label, "header": header_text})
+        return out
 
     def find_column_by_header(
         self,

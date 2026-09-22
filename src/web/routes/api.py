@@ -42,6 +42,12 @@ class NewProjectBody(BaseModel):
     project_name: str = ""
     package_name: str = ""
     launch_region: str = ""
+    # === info 字段(/info 命令会读取,master 表里有对应列才会被写入)===
+    class_name: str = ""
+    privacy_policy: str = ""
+    sha1: str = ""
+    sha256: str = ""
+    hash_value: str = ""
     mapping: Optional[NewMappingBody] = None
 
 
@@ -95,6 +101,31 @@ async def get_projects(request: Request):
         ],
         "error_count": cache.error_count() if cache else 0,
     }
+
+
+@router.get("/projects/new-form-fields")
+async def get_new_form_fields(request: Request):
+    """返回 master sheet 中实际存在的 info 字段(主activity类名/SHA-1/SHA-256/隐私政策/hash值)。
+
+    给"新增项目"前端表单用,根据 master 表头动态渲染可选的 info 输入框。
+    字段不存在就不出现在表单里,避免让用户填了一个 sheet 里没地方写的值。
+
+    注意:必须注册在 GET /projects/{project_id} 之前,否则会被路径参数吞掉。
+    """
+    app = request.app
+    cfg = app.state.cfg
+    sheet_repo = app.state.sheet_repo
+    master = next((s for s in cfg.spreadsheets if s.role == "master"), None)
+    if master is None:
+        raise HTTPException(status_code=500, detail="no master spreadsheet configured")
+    try:
+        fields = await asyncio.to_thread(
+            sheet_repo.get_info_field_columns, master
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("get_info_field_columns failed for master sheet")
+        raise HTTPException(status_code=502, detail=f"sheet header read failed: {e}")
+    return {"info_fields": fields}
 
 
 @router.post("/refresh")
@@ -574,6 +605,12 @@ async def post_project(request: Request, body: NewProjectBody):
         "project_name": body.project_name.strip(),
         "package_name": body.package_name.strip(),
         "launch_region": body.launch_region.strip(),
+        # === info 字段(空字符串也会被写入对应列,append_row 通过 HeaderDetector 跳过缺失列)===
+        "class_name": body.class_name.strip(),
+        "privacy_policy": body.privacy_policy.strip(),
+        "sha1": body.sha1.strip(),
+        "sha256": body.sha256.strip(),
+        "hash_value": body.hash_value.strip(),
     }
     try:
         await asyncio.to_thread(
