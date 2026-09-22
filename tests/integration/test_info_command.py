@@ -5,10 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.project import Field, Project, SheetView
+from src.models.status import normalize
 
 
-def _make_project(pid: str, fields_dict: dict) -> Project:
-    """构造带指定 fields 的 Project。fields_dict key 是 recognized_as。"""
+def _make_project(pid: str, fields_dict: dict, status_code: str = "PUBLISHED") -> Project:
+    """构造带指定 fields 的 Project。fields_dict key 是 recognized_as。
+    status_code 默认 "PUBLISHED"(已上架);可传其他状态测未上架的拒绝逻辑。
+    """
     fields = [
         Field(name=k, value=v, column_index=i + 1, row_index=2, recognized_as=k)
         for i, (k, v) in enumerate(fields_dict.items())
@@ -18,7 +21,8 @@ def _make_project(pid: str, fields_dict: dict) -> Project:
         project_id=pid,
         project_name=fields_dict.get("project_name"),
         package_name=fields_dict.get("package_name"),
-        status=fields_dict.get("status"),
+        status=normalize(status_code) if status_code else None,
+        status_raw=status_code,
         sheets=[SheetView(
             spreadsheet_id="ss1",
             sheet_name="项目主表",
@@ -216,3 +220,69 @@ async def test_info_no_args_shows_usage():
 
     text = mock_reply.call_args[0][1]
     assert "/info" in text or "用法" in text
+
+
+@pytest.mark.asyncio
+async def test_info_rejects_non_published_status():
+    """/info 只服务于已上架(PUBLISHED)项目;其他状态报错。"""
+    from src.bot.commands import info_cmd
+
+    # 完整字段 + 已上架 → 默认测试通过;此处测"未上架"被拒
+    p = _make_project("WW-100", {
+        "project_id": "WW-100",
+        "package_name": "com.test.building",
+        "class_name": "com.test.building.MainActivity",
+        "sha1": "AB",
+        "sha256": "CD",
+        "hash_value": "EF",
+        "privacy_policy": "https://example.com/p",
+        "store_url": "https://example.com/app",
+    }, status_code="MAKING")  # 在制作中,不是已上架
+
+    cache = MagicMock()
+    cache.get.return_value = p
+    cache.list_projects.return_value = [p]
+
+    update = _make_update("/info WW-100")
+    ctx = _make_context(cache)
+    ctx.args = ["WW-100"]
+
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
+        await info_cmd(update, ctx)
+
+    text = mock_reply.call_args[0][1]
+    assert "未上架" in text
+    assert "WW-100" in text
+    # 不能继续返回字段信息(没出现投放信息块)
+    assert "com.test.building" not in text or False  # 完整字段应该被拒
+
+
+@pytest.mark.asyncio
+async def test_info_rejects_when_status_is_none():
+    """status 解析不出(状态非枚举值)也要拒。"""
+    from src.bot.commands import info_cmd
+
+    p = _make_project("WW-101", {
+        "project_id": "WW-101",
+        "package_name": "com.test.x",
+        "class_name": "x",
+        "sha1": "a",
+        "sha256": "b",
+        "hash_value": "c",
+        "privacy_policy": "d",
+        "store_url": "e",
+    }, status_code="未知状态")  # 不在 StatusCode 枚举里
+
+    cache = MagicMock()
+    cache.get.return_value = p
+    cache.list_projects.return_value = [p]
+
+    update = _make_update("/info WW-101")
+    ctx = _make_context(cache)
+    ctx.args = ["WW-101"]
+
+    with patch("src.bot.commands._reply_plain", new=AsyncMock()) as mock_reply:
+        await info_cmd(update, ctx)
+
+    text = mock_reply.call_args[0][1]
+    assert "未上架" in text

@@ -343,6 +343,20 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if f.recognized_as and f.value and f.recognized_as not in found:
                 found[f.recognized_as] = str(f.value).strip()
 
+    # 2.5) 控制点:只服务于已上架(PUBLISHED)项目。
+    # 其他状态(制作中/已下架/未知)不返回投放参数,
+    # 避免泄露未发布包的真实 URL/密钥,或给客户错误的部署参数。
+    from src.models.status import StatusCode
+    from src.bot.templates import status_display_text
+
+    if p.status != StatusCode.PUBLISHED:
+        status_text = status_display_text(p) or (p.status_raw or "未知")
+        await _reply_plain(
+            update,
+            f"{p.project_id} 该包未上架(当前状态:{status_text}),无法提取投放信息",
+        )
+        return
+
     # 期望字段(显示用中文标签)
     expected = [
         ("project_id", "项目编号"),
