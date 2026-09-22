@@ -212,8 +212,11 @@ async def get_project_detail(request: Request, project_id: str):
 
     from src.web.cache import LOCKED_RECOGNIZED_AS
 
-    def field_payload(field, sheet_name):
-        fid = f"{sheet_name}::{sheet_name}::{field.row_index}::{field.column_index}"
+    def field_payload(field, sheet_view):
+        # field_id 格式: {spreadsheet_id}::{sheet_name}::{row}::{col}
+        # 第一段必须是 spreadsheet_id(给 gspread open_by_key 用),
+        # 不是 sheet_name(那是 tab 名,会 404)
+        fid = f"{sheet_view.spreadsheet_id}::{sheet_view.sheet_name}::{field.row_index}::{field.column_index}"
         editable = (field.recognized_as or "") not in LOCKED_RECOGNIZED_AS
         return {
             "field_id": fid,
@@ -236,10 +239,11 @@ async def get_project_detail(request: Request, project_id: str):
             ],
             "sheets": [
                 {
+                    "spreadsheet_id": sv.spreadsheet_id,
                     "spreadsheet_name": sv.sheet_name,
                     "sheet_name": sv.sheet_name,
                     "fetched_at": sv.fetched_at.isoformat(),
-                    "fields": [field_payload(f, sv.sheet_name) for f in sv.fields],
+                    "fields": [field_payload(f, sv) for f in sv.fields],
                 }
                 for sv in p.sheets
             ],

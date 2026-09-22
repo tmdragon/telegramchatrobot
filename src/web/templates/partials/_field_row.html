@@ -1,5 +1,7 @@
 {# 单个字段行。参数: field (Field), sheet (SheetView) #}
-{% set field_id = sheet.sheet_name ~ "::" ~ sheet.sheet_name ~ "::" ~ field.row_index ~ "::" ~ field.column_index %}
+{# field_id 格式: {spreadsheet_id}::{sheet_name}::{row}::{col}
+   第一段是 spreadsheet_id(给 gspread open_by_key 用),不是 sheet_name(否则 404) #}
+{% set field_id = sheet.spreadsheet_id ~ "::" ~ sheet.sheet_name ~ "::" ~ field.row_index ~ "::" ~ field.column_index %}
 {% set is_locked = field.recognized_as in ["project_id"] %}
 <tr class="sheet-row"
     data-field-id="{{ field_id }}"
