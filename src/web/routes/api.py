@@ -134,6 +134,33 @@ async def get_new_form_fields(request: Request):
     return {"info_fields": fields}
 
 
+@router.get("/statuses")
+async def get_statuses():
+    """返回所有合法状态选项(用于项目详情页"状态"列的内联编辑下拉框)。
+
+    每条 {code, display, aliases}:
+    - code: StatusCode 枚举值(如 ORDERED)
+    - display: 中文显示名(来自 STATUS_DISPLAY_CN)
+    - aliases: 所有合法中文/英文别名(用户填到 sheet 的字符串,
+      由 normalize_status 识别为该 code)
+
+    前端用这些构建 <optgroup>,用户选哪个字符串就 PUT 哪个,服务端
+    normalize 时识别回对应 code。
+    """
+    from src.models.status import StatusCode, ALIASES
+    from src.bot.templates import STATUS_DISPLAY_CN
+    return {
+        "statuses": [
+            {
+                "code": code.value,
+                "display": STATUS_DISPLAY_CN.get(code, code.value),
+                "aliases": list(ALIASES.get(code, [])),
+            }
+            for code in StatusCode
+        ]
+    }
+
+
 @router.post("/refresh")
 async def post_refresh(request: Request, body: Optional[RefreshBody] = None):
     app = request.app

@@ -2,15 +2,20 @@
 //
 // 关键：委托目标必须是稳定的祖先（.sheet-section），绝对不能挂在 innerHTML 会被替换的子树上。
 // auto-refresh 替换子树时，挂在子树上的 listener 会被 GC；只有稳定祖先上的 listener 才会存活。
+//
+// 状态列(recognized_as="status")特殊处理:点编辑时渲染 <select> 而不是 <input>,
+// 选项来自 GET /api/statuses(见 status-select.js)。
 
 import { putJson, ApiError } from "./api.js";
 import { errors } from "./status-bar.js";
+import { buildStatusSelect, loadStatusOptions } from "./status-select.js";
 
 const LOCKED_RECOGNIZED_AS = new Set(["project_id"]);
 const FIELD_ID_KEY = "field-id";
 const ORIGINAL_KEY = "data-original";
 const SELECTOR_EDITABLE = ".field-cell[data-editable]";
 const SELECTOR_SECTION = ".sheet-section";
+const STATUS_RECOGNIZED = "status";
 
 function _encodeFieldId(raw) {
   // 服务端期望 {spreadsheet_name}::{sheet_name}::{row}::{col}
@@ -21,21 +26,37 @@ function _isLocked(cell) {
   return LOCKED_RECOGNIZED_AS.has(cell.dataset.recognizedAs);
 }
 
-async function _commit(cell, sectionEl) {
+function _isStatusCell(cell) {
+  return cell.dataset.recognizedAs === STATUS_RECOGNIZED;
+}
+
+function _newValueFromCell(cell) {
+  // 优先取 select/input,否则 fallback 到 display 文本
+  const editable = cell.querySelector(".field-cell__select, .field-cell__input");
+  if (editable) return editable.value;
+  const display = cell.querySelector(".field-cell__display");
+  return display ? display.textContent : "";
+}
+
+async function _commit(cell) {
   const tr = cell.closest(".sheet-row");
   if (!tr) return;
   const fieldId = tr.dataset.fieldId;
   const projectId = document.querySelector("[data-project-id]")?.dataset.projectId;
-  const input = cell.querySelector("input");
-  if (!input || !fieldId || !projectId) return;
+  if (!fieldId || !projectId) return;
 
-  const newValue = input.value;
+  const newValue = _newValueFromCell(cell);
   const originalValue = tr.getAttribute(ORIGINAL_KEY) || "";
 
   // 乐观更新
   cell.classList.remove("field-cell--editing");
   const display = cell.querySelector(".field-cell__display");
-  if (display) display.textContent = newValue;
+  if (display) {
+    display.textContent = newValue;
+    display.style.display = "";
+  }
+  cell.querySelectorAll(".field-cell__select, .field-cell__input").forEach((n) => n.remove());
+  cell.querySelectorAll(".field-cell__actions").forEach((n) => n.remove());
   tr.setAttribute(ORIGINAL_KEY, newValue);
 
   try {
@@ -43,7 +64,6 @@ async function _commit(cell, sectionEl) {
     cell.classList.remove("field-cell--error");
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
-      // 回滚到 data-original；不丢失原始值
       if (display) display.textContent = originalValue;
       tr.setAttribute(ORIGINAL_KEY, originalValue);
       cell.classList.add("field-cell--error");
@@ -66,25 +86,22 @@ async function _commit(cell, sectionEl) {
 function _cancel(cell) {
   cell.classList.remove("field-cell--editing");
   const display = cell.querySelector(".field-cell__display");
-  const input = cell.querySelector("input");
   if (display) display.style.display = "";
-  if (input) input.remove();
+  cell.querySelectorAll(".field-cell__select, .field-cell__input").forEach((n) => n.remove());
   cell.querySelectorAll(".field-cell__actions").forEach((n) => n.remove());
 }
 
-function _enterEdit(cell) {
-  if (cell.classList.contains("field-cell--editing")) return;
-  if (_isLocked(cell)) return;  // 双重保险
+function _wireActions(cell, ok, cancel, editable) {
+  ok.addEventListener("click", (ev) => { ev.stopPropagation(); _commit(cell); });
+  cancel.addEventListener("click", (ev) => { ev.stopPropagation(); _cancel(cell); });
+  editable.addEventListener("click", (ev) => ev.stopPropagation());
+  editable.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") { ev.preventDefault(); _commit(cell); }
+    else if (ev.key === "Escape") { ev.preventDefault(); _cancel(cell); }
+  });
+}
 
-  cell.classList.add("field-cell--editing");
-  const display = cell.querySelector(".field-cell__display");
-  const currentText = display ? display.textContent : "";
-  if (display) display.style.display = "none";
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = currentText;
-
+function _buildActions() {
   const actions = document.createElement("span");
   actions.className = "field-cell__actions";
   const ok = document.createElement("button");
@@ -94,17 +111,36 @@ function _enterEdit(cell) {
   cancel.textContent = "Cancel";
   cancel.title = "取消";
   actions.append(ok, cancel);
+  return { actions, ok, cancel };
+}
 
-  ok.addEventListener("click", (ev) => { ev.stopPropagation(); _commit(cell); });
-  cancel.addEventListener("click", (ev) => { ev.stopPropagation(); _cancel(cell); });
-  input.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") { ev.preventDefault(); _commit(cell); }
-    else if (ev.key === "Escape") { ev.preventDefault(); _cancel(cell); }
-  });
-  input.addEventListener("click", (ev) => ev.stopPropagation());
-  cell.append(input, actions);
-  input.focus();
-  input.select();
+async function _enterEdit(cell) {
+  if (cell.classList.contains("field-cell--editing")) return;
+  if (_isLocked(cell)) return;
+
+  cell.classList.add("field-cell--editing");
+  const display = cell.querySelector(".field-cell__display");
+  const currentText = display ? display.textContent : "";
+  if (display) display.style.display = "none";
+
+  let editable;
+  if (_isStatusCell(cell)) {
+    // 状态列:渲染下拉框(选项来自 status-select.js)
+    await loadStatusOptions();
+    editable = buildStatusSelect(currentText);
+  } else {
+    // 其他列:文本输入框
+    editable = document.createElement("input");
+    editable.type = "text";
+    editable.value = currentText;
+    editable.className = "field-cell__input";
+  }
+
+  const { actions, ok, cancel } = _buildActions();
+  cell.append(editable, actions);
+  _wireActions(cell, ok, cancel, editable);
+  editable.focus();
+  if (editable.tagName === "INPUT") editable.select();
 }
 
 export function init() {
@@ -115,14 +151,11 @@ export function init() {
       const target = ev.target;
       if (!(target instanceof Element)) return;
       const editing = section.querySelector(".field-cell--editing");
-      // click-outside 取消正在编辑的 cell
       if (editing) {
         if (target instanceof Element && !editing.contains(target)) {
-          // 点击的是另一个 cell：在新 cell 进入编辑前，先取消旧 cell
           if (target.closest(SELECTOR_EDITABLE) && target.closest(SELECTOR_EDITABLE) !== editing) {
             _cancel(editing);
           } else if (!target.closest(SELECTOR_EDITABLE)) {
-            // 点击非 cell 区域 → 取消
             _cancel(editing);
           }
         }

@@ -454,11 +454,13 @@ a:hover { text-decoration: underline; }
 .field-cell { cursor: default; }
 .field-cell--editable { cursor: pointer; }
 .field-cell--editable:hover { background: var(--c-warning-soft); }
-.field-cell--editing input {
+.field-cell--editing input,
+.field-cell--editing .field-cell__select {
   width: 100%; padding: var(--s-1) var(--s-2);
   font: inherit; border: 1px solid var(--c-primary);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-sm); background: var(--c-surface);
 }
+.field-cell--editing .field-cell__select { cursor: pointer; }
 .field-cell--editing .field-cell__actions { display: inline-flex; gap: var(--s-1); margin-left: var(--s-2); }
 .field-cell--locked { color: var(--c-text-muted); background: var(--c-surface-2); }
 .field-cell--locked::before { content: "🔒 "; font-size: 11px; }

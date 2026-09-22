@@ -280,3 +280,37 @@ def test_post_project_default_status_is_yixiadan():
     call_args = sheet_repo.append_row.call_args
     values = call_args[0][2] if len(call_args[0]) >= 3 else call_args.kwargs["values"]
     assert values["status"] == "已下单"
+
+
+def test_get_statuses_returns_all_codes_with_aliases():
+    """GET /api/statuses 应该返回所有 StatusCode + display + aliases。"""
+    from src.web.app import create_app
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [MagicMock(id="ss1", name="项目主表", role="master")]
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    r = client.get("/api/statuses")
+    assert r.status_code == 200
+    body = r.json()
+    assert "statuses" in body
+    codes = [s["code"] for s in body["statuses"]]
+    # 至少要包含核心的几个 code
+    assert "ORDERED" in codes
+    assert "MAKING" in codes
+    assert "PUBLISHED" in codes
+    # 每条都应有 display 和 aliases
+    for s in body["statuses"]:
+        assert "display" in s
+        assert "aliases" in s
+        assert isinstance(s["aliases"], list)
+    # ORDERED 应该含 "已下单"(我们刚改的默认)
+    ordered = next(s for s in body["statuses"] if s["code"] == "ORDERED")
+    assert "已下单" in ordered["aliases"]
