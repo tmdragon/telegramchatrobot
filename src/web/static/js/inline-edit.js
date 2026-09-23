@@ -31,8 +31,8 @@ function _isStatusCell(cell) {
 }
 
 function _newValueFromCell(cell) {
-  // 优先取 select/input,否则 fallback 到 display 文本
-  const editable = cell.querySelector(".field-cell__select, .field-cell__input");
+  // 优先取 select/input/textarea,否则 fallback 到 display 文本
+  const editable = cell.querySelector(".field-cell__select, .field-cell__input, .field-cell__textarea");
   if (editable) return editable.value;
   const display = cell.querySelector(".field-cell__display");
   return display ? display.textContent : "";
@@ -55,7 +55,7 @@ async function _commit(cell) {
     display.textContent = newValue;
     display.style.display = "";
   }
-  cell.querySelectorAll(".field-cell__select, .field-cell__input").forEach((n) => n.remove());
+  cell.querySelectorAll(".field-cell__select, .field-cell__input, .field-cell__textarea").forEach((n) => n.remove());
   cell.querySelectorAll(".field-cell__actions").forEach((n) => n.remove());
   tr.setAttribute(ORIGINAL_KEY, newValue);
 
@@ -87,7 +87,7 @@ function _cancel(cell) {
   cell.classList.remove("field-cell--editing");
   const display = cell.querySelector(".field-cell__display");
   if (display) display.style.display = "";
-  cell.querySelectorAll(".field-cell__select, .field-cell__input").forEach((n) => n.remove());
+  cell.querySelectorAll(".field-cell__select, .field-cell__input, .field-cell__textarea").forEach((n) => n.remove());
   cell.querySelectorAll(".field-cell__actions").forEach((n) => n.remove());
 }
 
@@ -95,9 +95,16 @@ function _wireActions(cell, ok, cancel, editable) {
   ok.addEventListener("click", (ev) => { ev.stopPropagation(); _commit(cell); });
   cancel.addEventListener("click", (ev) => { ev.stopPropagation(); _cancel(cell); });
   editable.addEventListener("click", (ev) => ev.stopPropagation());
+  const isTextarea = editable.tagName === "TEXTAREA";
   editable.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); _cancel(cell); return; }
+    // textarea:Enter 插入换行;用 Ctrl+Enter / Cmd+Enter 提交
+    if (isTextarea) {
+      if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); _commit(cell); }
+      return;
+    }
+    // input:Enter 直接提交
     if (ev.key === "Enter") { ev.preventDefault(); _commit(cell); }
-    else if (ev.key === "Escape") { ev.preventDefault(); _cancel(cell); }
   });
 }
 
@@ -128,6 +135,13 @@ async function _enterEdit(cell) {
     // 状态列:渲染下拉框(选项来自 status-select.js)
     await loadStatusOptions();
     editable = buildStatusSelect(currentText);
+  } else if (currentText.length > 80) {
+    // 长内容(URL、长字符串)用 textarea,方便查看全部 + 选择部分内容复制
+    editable = document.createElement("textarea");
+    editable.value = currentText;
+    editable.className = "field-cell__textarea";
+    editable.rows = Math.min(8, Math.max(3, Math.ceil(currentText.length / 60)));
+    editable.spellcheck = false;
   } else {
     // 其他列:文本输入框
     editable = document.createElement("input");
@@ -140,6 +154,7 @@ async function _enterEdit(cell) {
   cell.append(editable, actions);
   _wireActions(cell, ok, cancel, editable);
   editable.focus();
+  // textareas 用 select() 会全选文字,不利于点进去调整位置;只对 input 全选
   if (editable.tagName === "INPUT") editable.select();
 }
 
