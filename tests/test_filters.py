@@ -55,3 +55,29 @@ def test_humanize_duration_none():
 
 def test_humanize_duration_negative():
     assert humanize_duration(-10) == "—"
+
+from src.models.payment import PaymentStatus
+from src.web.filters import payment_badge
+
+
+def test_payment_badge_paid():
+    html = payment_badge(PaymentStatus.PAID)
+    assert "已回款" in html
+    assert "status-badge--paid" in html
+
+
+def test_payment_badge_unpaid():
+    html = payment_badge(PaymentStatus.UNPAID)
+    assert "未回款" in html
+    assert "status-badge--unpaid" in html
+
+
+def test_payment_badge_no_record():
+    html = payment_badge(None)
+    assert "无记录" in html
+    assert "status-badge--unknown" in html
+
+
+def test_payment_badge_returns_markup():
+    result = payment_badge(PaymentStatus.PAID)
+    assert isinstance(result, markupsafe.Markup)

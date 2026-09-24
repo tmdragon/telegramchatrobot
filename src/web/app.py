@@ -21,7 +21,7 @@ from src.config import AppConfig
 from src.sheets.repo import SheetRepo
 from src.sheets.mapping_repo import MappingRepo
 from src.store.db import Store
-from src.web.filters import humanize_duration, status_badge
+from src.web.filters import humanize_duration, payment_badge, status_badge
 
 
 TEMPLATES_DIR = "src/web/templates"
@@ -105,6 +105,7 @@ def create_app(
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
     templates.env.autoescape = True
     templates.env.filters["status_badge"] = status_badge
+    templates.env.filters["payment_badge"] = payment_badge
     templates.env.filters["humanize_duration"] = humanize_duration
     app.state.templates = templates
 

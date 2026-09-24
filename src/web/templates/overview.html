@@ -229,11 +229,12 @@
       <table class="overview-table" id="overview-table">
         <thead>
           <tr>
-            <th style="width: 18%;">项目编号</th>
-            <th style="width: 28%;">项目名</th>
-            <th style="width: 18%;">当前状态</th>
-            <th style="width: 18%;">停留</th>
-            <th style="width: 18%; text-align: right;">操作</th>
+            <th style="width: 14%;">项目编号</th>
+            <th style="width: 22%;">项目名</th>
+            <th style="width: 16%;">当前状态</th>
+            <th style="width: 12%;">回款</th>
+            <th style="width: 14%;">停留</th>
+            <th style="width: 22%; text-align: right;">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -261,6 +262,9 @@
                 {% with code=s.status, raw=s.status.value if s.status else None %}
                   {% include "partials/_status_badge.html" %}
                 {% endwith %}
+              </td>
+              <td>
+                {{ s.payment_status | payment_badge(s.payment_raw) }}
               </td>
               <td>
                 <span class="overview-row__dwell" data-dwell-seconds="{{ s.dwell_seconds }}">

@@ -12,6 +12,7 @@ from typing import Optional
 from markupsafe import Markup
 
 from src.models.status import StatusCode
+from src.models.payment import PaymentStatus
 
 
 # spec §3.2：状态 -> (modifier, displayName)
@@ -29,6 +30,13 @@ STATUS_DISPLAY: dict[StatusCode, tuple[str, str]] = {
     StatusCode.REMAKING:             ("remaking",       "我方重做中"),
     StatusCode.PUBLISHED:            ("published",      "已发布"),
     StatusCode.OFF_SHELF:            ("off-shelf",      "已下架"),
+}
+
+
+# 支付状态 -> (modifier, displayName)
+PAYMENT_DISPLAY: dict[PaymentStatus, tuple[str, str]] = {
+    PaymentStatus.PAID:    ("paid",     "已回款"),
+    PaymentStatus.UNPAID:  ("unpaid",   "未回款"),
 }
 
 
@@ -53,6 +61,40 @@ def status_badge(code: StatusCode | None, raw: Optional[str] = None) -> Markup:
         f'data-status-code="">'
         f'<span class="status-badge__dot" aria-hidden="true"></span>'
         f'<span class="status-badge__name">{text}</span>'
+        f"</span>"
+    )
+
+
+def payment_badge(code: PaymentStatus | None, raw: Optional[str] = None) -> Markup:
+    """渲染支付状态徽章。code 已知则按映射渲染；否则展示 raw("无记录"样式)。
+
+    三种状态:
+    - PAID  → 已回款(绿)
+    - UNPAID → 未回款(红)
+    - None + raw 为空 → 无记录(灰)
+    """
+    if code is not None and code in PAYMENT_DISPLAY:
+        modifier, name = PAYMENT_DISPLAY[code]
+        return Markup(
+            f'<span class="status-badge status-badge--{modifier}" '
+            f'data-payment-code="{code.value}">'
+            f'<span class="status-badge__dot" aria-hidden="true"></span>'
+            f'<span class="status-badge__name">{name}</span>'
+            f"</span>"
+        )
+    if raw:
+        return Markup(
+            f'<span class="status-badge status-badge--unknown" '
+            f'data-payment-code="">'
+            f'<span class="status-badge__dot" aria-hidden="true"></span>'
+            f'<span class="status-badge__name">{raw}</span>'
+            f"</span>"
+        )
+    return Markup(
+        f'<span class="status-badge status-badge--unknown" '
+        f'data-payment-code="">'
+        f'<span class="status-badge__dot" aria-hidden="true"></span>'
+        f'<span class="status-badge__name">无记录</span>'
         f"</span>"
     )
 
