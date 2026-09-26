@@ -130,9 +130,12 @@
           <div class="form-section__title">📎 关联项目</div>
           {# 已关联(待保存)— 绿色边框 chip,带 × #}
           <div id="eg-projects-current" class="eg-projects-list"></div>
-          {# 全部项目下拉 + 添加按钮 #}
+          {# 全部项目:搜索框 + 可过滤 select(listbox 多行)+ 添加按钮 #}
           <div class="form-row" style="margin-top: var(--s-3);">
-            <select id="eg-projects-add-select">
+            <input type="search" id="eg-projects-search"
+                   placeholder="🔍 搜索项目编号或名称..." autocomplete="off"
+                   class="eg-projects-search-input">
+            <select id="eg-projects-add-select" size="6" class="eg-projects-select">
               <option value="">-- 选择项目以添加 --</option>
               {% for p in projects %}
                 <option value="{{ p.project_id }}" data-project-name="{{ p.project_name or '' }}">{{ p.project_id }}{% if p.project_name %} ({{ p.project_name }}){% endif %}</option>

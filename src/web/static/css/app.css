@@ -618,12 +618,27 @@ a:hover { text-decoration: underline; }
 }
 .eg-project-chip a:hover { text-decoration: underline; }
 .eg-project-chip__name { color: var(--c-text-muted); font-size: 11px; }
-.eg-project-chip__remove {
-  background: transparent; border: none; cursor: pointer;
-  color: var(--c-danger); font-size: 16px; line-height: 1;
-  padding: 0 2px;
-}
 .eg-project-chip__remove:hover { color: #b91c1c; }
+/* 编辑群 modal 的项目搜索 + listbox */
+.eg-projects-search-input {
+  width: 100%; padding: 6px 10px; margin-bottom: 6px;
+  font: inherit; font-size: 13px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+}
+.eg-projects-search-input:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+}
+.eg-projects-select {
+  width: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  font: inherit;
+}
 .chip {
   display: inline-flex;
   padding: 2px 8px;

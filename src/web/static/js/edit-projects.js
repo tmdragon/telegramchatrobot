@@ -62,13 +62,52 @@ export function addProjectToEdit(pid) {
 export function wireAddProjectControl() {
   const addBtn = document.getElementById("eg-projects-add-btn");
   const addSelect = document.getElementById("eg-projects-add-select");
+  const searchInput = document.getElementById("eg-projects-search");
   if (!addBtn || !addSelect) return;
   addBtn.addEventListener("click", () => {
     const pid = addSelect.value;
     if (pid) {
       addProjectToEdit(pid);
       addSelect.value = "";
+      if (searchInput) searchInput.value = "";
+      _filterOptions(addSelect, "");
       addSelect.focus();
     }
   });
+  // 搜索过滤:输入框值变化时隐藏不匹配的 options(option.hidden)
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      _filterOptions(addSelect, searchInput.value);
+    });
+    // Enter 直接选第一个可见的
+    searchInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const first = Array.from(addSelect.options).find(
+          (o) => o.value && !o.hidden
+        );
+        if (first) {
+          addSelect.value = first.value;
+          addBtn.click();
+        }
+      }
+    });
+  }
+}
+
+function _filterOptions(select, query) {
+  const q = (query || "").toLowerCase().trim();
+  let firstVisible = null;
+  for (const opt of select.options) {
+    if (!opt.value) continue;  // 占位 option 始终保留
+    const visible = !q || opt.textContent.toLowerCase().includes(q);
+    opt.hidden = !visible;
+    if (visible && firstVisible === null) firstVisible = opt;
+  }
+  // 自动选第一个可见,方便直接按 Enter/添加
+  if (firstVisible) {
+    select.value = firstVisible.value;
+  } else {
+    select.value = "";
+  }
 }
