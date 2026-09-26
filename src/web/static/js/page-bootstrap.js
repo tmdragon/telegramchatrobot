@@ -19,6 +19,7 @@ const PAGE_MODULES = {
     np.init();
   }),
   detail: () => import("./inline-edit.js"),
+  groups: () => import("./groups.js"),
 };
 
 const page = document.body.dataset.page || "overview";

@@ -207,3 +207,49 @@ async def mappings(request: Request):
             "last_refresh_human": last_human, "errors": [],
         },
     )
+
+
+@router.get("/groups", response_class=HTMLResponse)
+async def groups_page(request: Request):
+    """群视角管理页:按 chat_id 聚合的群列表 + CRUD(完整)。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    templates = app.state.templates
+    cache = app.state.cache
+
+    try:
+        groups_list = await asyncio.to_thread(mapping_repo.load_all_grouped)
+    except Exception as e:  # noqa: BLE001
+        return templates.TemplateResponse(
+            request=request, name="groups.html",
+            context={
+                "page_name": "groups", "groups": [], "projects": [],
+                "last_refresh_at": None, "last_refresh_human": None,
+                "errors": [f"无法读取映射表: {type(e).__name__}: {e}"],
+            },
+            status_code=200,
+        )
+
+    # 给"新增群"modal 用:从 cache 拿所有项目编号供下拉选
+    projects = []
+    if cache is not None:
+        for p in cache.list_projects():
+            projects.append({
+                "project_id": p.project_id,
+                "project_name": p.project_name or "",
+            })
+        projects.sort(key=lambda x: x["project_id"])
+
+    last = cache.last_refresh_at() if cache else None
+    last_human = (
+        last.astimezone(bot_templates.DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        if last else None
+    )
+    return templates.TemplateResponse(
+        request=request, name="groups.html",
+        context={
+            "page_name": "groups", "groups": groups_list, "projects": projects,
+            "last_refresh_at": last.isoformat() if last else None,
+            "last_refresh_human": last_human, "errors": [],
+        },
+    )

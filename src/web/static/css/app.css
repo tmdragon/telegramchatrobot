@@ -465,6 +465,90 @@ a:hover { text-decoration: underline; }
 .error-banner__title { color: var(--c-danger); font-weight: 600; margin-bottom: var(--s-1); display: block; }
 .error-banner__list { margin: 0; padding-left: var(--s-4); color: #82071e; font-size: 13px; }
 
+/* ===== Groups page ===== */
+.groups-header {
+  display: flex; align-items: center; gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.groups-header__count {
+  font-size: 13px; color: var(--c-text-muted);
+  background: var(--c-surface-2); border: 1px solid var(--c-border-soft);
+  padding: 2px 8px; border-radius: var(--r-pill);
+}
+.groups-header__add {
+  margin-left: auto;
+  padding: 6px 14px; font-size: 13px; font-weight: 600;
+  border-radius: var(--r-sm); border: none; cursor: pointer;
+  background: var(--c-primary); color: white;
+}
+.groups-header__add:hover { background: #0860c7; }
+
+.groups-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-sm);
+  overflow: hidden;
+}
+.groups-table { width: 100%; border-collapse: collapse; }
+.groups-table thead th {
+  padding: var(--s-3) var(--s-4);
+  font-size: 12px; font-weight: 600;
+  color: var(--c-text-muted);
+  background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-soft);
+  text-align: left;
+}
+.groups-table tbody td {
+  padding: var(--s-3) var(--s-4);
+  font-size: 13px;
+  border-bottom: 1px solid var(--c-border-soft);
+  vertical-align: middle;
+}
+.groups-table tbody tr:last-child td { border-bottom: none; }
+.groups-table tbody tr:hover { background: var(--c-surface-2); }
+
+.groups-row__chat {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-primary);
+  padding: 2px 6px;
+  background: var(--c-primary-soft);
+  border-radius: var(--r-sm);
+}
+.groups-row__projects {
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.chip {
+  display: inline-flex;
+  padding: 2px 8px;
+  font-family: var(--f-mono); font-size: 12px;
+  background: var(--c-muted-soft); color: var(--c-text);
+  border-radius: var(--r-pill);
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+a.chip:hover {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+  border-color: var(--c-primary);
+  text-decoration: none;
+}
+.groups-row__actions button {
+  font-size: 12px;
+  padding: 4px 10px;
+  margin-left: 4px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  cursor: pointer;
+}
+.groups-row__actions button:hover {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary);
+}
+
 /* ===== Inline edit (project detail) ===== */
 .field-cell { cursor: default; }
 .field-cell--editable { cursor: pointer; }

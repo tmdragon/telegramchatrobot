@@ -382,3 +382,96 @@ def test_put_field_broadcasts_on_status_change():
     # bug fix: status_raw 也必须更新,否则 render_broadcast 用 status_raw 渲染显示老字符串
     p_after = cache.get("TEST-001")
     assert p_after.status_raw == "对方验收中"
+
+
+def test_get_groups_manage_returns_aggregated_groups():
+    """GET /api/groups/manage 应该返回按 chat_id 聚合的群列表。"""
+    from src.web.app import create_app
+    from src.sheets.mapping_repo import MappingRepo
+    from unittest.mock import MagicMock
+    from fastapi.testclient import TestClient
+    from src.web.cache import ProjectCache
+
+    # mock mapping_repo.load_all_grouped
+    cfg = MagicMock()
+    cfg.ui_bind = "127.0.0.1"
+    cfg.ui_port = 8765
+    cfg.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    fake_mapping_repo = MagicMock(spec=MappingRepo)
+    from src.sheets.mapping_repo import GroupView
+    fake_mapping_repo.load_all_grouped.return_value = [
+        GroupView(chat_id="-1001", note="一群", projects=["PRJ-001", "PRJ-002"], enabled_state="partial"),
+        GroupView(chat_id="-1002", note="二群", projects=["PRJ-003"], enabled_state="all"),
+    ]
+    app = create_app(cfg, store, sheet_repo, fake_mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    r = client.get("/api/groups/manage")
+    assert r.status_code == 200
+    body = r.json()
+    assert "groups" in body
+    g = body["groups"][0]
+    assert g["chat_id"] == "-1001"
+    assert g["note"] == "一群"
+    assert g["projects"] == ["PRJ-001", "PRJ-002"]
+    assert g["enabled_state"] == "partial"
+
+
+def test_post_groups_manage_creates_new_group():
+    """POST /api/groups/manage 应该创建新群(首个 mapping)。"""
+    from src.web.app import create_app
+    from src.sheets.mapping_repo import MappingRepo
+    from unittest.mock import MagicMock
+    from fastapi.testclient import TestClient
+    from src.web.cache import ProjectCache
+
+    cfg = MagicMock()
+    cfg.ui_bind = "127.0.0.1"
+    cfg.ui_port = 8765
+    cfg.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    fake_mapping_repo = MagicMock(spec=MappingRepo)
+    fake_mapping_repo.chat_id_exists.return_value = False
+    app = create_app(cfg, store, sheet_repo, fake_mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {"chat_id": "-1001", "project_id": "PRJ-001", "note": "一群"}
+    r = client.post("/api/groups/manage", json=body)
+    assert r.status_code == 201
+    fake_mapping_repo.create_group.assert_called_once_with(
+        chat_id="-1001", project_id="PRJ-001", note="一群", enabled=True,
+    )
+
+
+def test_post_groups_manage_409_on_duplicate_chat_id():
+    """POST /api/groups/manage chat_id 已存在 → 409。"""
+    from src.web.app import create_app
+    from src.sheets.mapping_repo import MappingRepo
+    from unittest.mock import MagicMock
+    from fastapi.testclient import TestClient
+    from src.web.cache import ProjectCache
+
+    cfg = MagicMock()
+    cfg.ui_bind = "127.0.0.1"
+    cfg.ui_port = 8765
+    cfg.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    fake_mapping_repo = MagicMock(spec=MappingRepo)
+    fake_mapping_repo.chat_id_exists.return_value = True
+    app = create_app(cfg, store, sheet_repo, fake_mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {"chat_id": "-1001", "project_id": "PRJ-001"}
+    r = client.post("/api/groups/manage", json=body)
+    assert r.status_code == 409
+    assert "exists" in r.json()["detail"].lower() or "已存在" in r.json()["detail"]

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}群映射管理 — checkGPRobot{% endblock %}
+
+{% block content %}
+<main class="page page--groups">
+  <header class="groups-header">
+    <h1>📡 群映射管理</h1>
+    <span class="groups-header__count" data-groups-count>{{ groups | length }}</span>
+    <button type="button" id="btn-new-group"
+            class="groups-header__add"
+            title="新增群（每条 chat_id 唯一）">+ 新建群</button>
+  </header>
+
+  {% include "partials/_error_banner.html" %}
+
+  {% if groups %}
+    <section class="groups-card">
+      <table class="groups-table" id="groups-table">
+        <thead>
+          <tr>
+            <th style="width: 20%;">群 chat_id</th>
+            <th style="width: 20%;">备注</th>
+            <th style="width: 30%;">关联项目</th>
+            <th style="width: 10%;">启用</th>
+            <th style="width: 8%;">项目数</th>
+            <th style="width: 12%; text-align: right;">操作</th>
+          </tr>
+        </thead>
+        <tbody data-groups-tbody>
+          {% for g in groups %}
+            <tr class="groups-row"
+                data-chat-id="{{ g.chat_id }}"
+                data-note="{{ g.note }}"
+                data-enabled-state="{{ g.enabled_state }}"
+                data-projects="{{ g.projects | join(',') }}">
+              <td><code class="groups-row__chat">{{ g.chat_id }}</code></td>
+              <td>{{ g.note or "—" }}</td>
+              <td>
+                <div class="groups-row__projects">
+                  {% for p in g.projects %}
+                    <a href="/project/{{ p }}" class="chip chip--project">{{ p }}</a>
+                  {% endfor %}
+                </div>
+              </td>
+              <td>
+                {% if g.enabled_state == "all" %}
+                  <span class="badge badge--ok">全部启用</span>
+                {% elif g.enabled_state == "partial" %}
+                  <span class="badge badge--warn">部分启用</span>
+                {% else %}
+                  <span class="badge badge--off">已停用</span>
+                {% endif %}
+              </td>
+              <td><strong>{{ g.projects | length }}</strong></td>
+              <td class="groups-row__actions" style="text-align: right;">
+                <button type="button" data-action="group-edit" data-chat-id="{{ g.chat_id }}">编辑</button>
+                <button type="button" data-action="group-delete" data-chat-id="{{ g.chat_id }}">停用</button>
+                <button type="button" data-action="group-test-send" data-chat-id="{{ g.chat_id }}">📨 测试</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% else %}
+    <p class="empty-state">暂无群映射。点击右上"+ 新建群"开始,或先在 <a href="/mappings">映射管理</a> 里加。</p>
+  {% endif %}
+
+  {# 新建群 modal #}
+  <div id="new-group-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal__panel" role="dialog" aria-labelledby="new-group-title">
+      <h2 id="new-group-title" class="modal__title">新建群</h2>
+      <form id="new-group-form" autocomplete="off">
+        <div class="form-row">
+          <label class="form-row__label" for="ng-chat-id">群 chat_id *</label>
+          <input id="ng-chat-id" name="chat_id" type="number"
+                 placeholder="负数,如 -1001234567890" required autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="ng-project-id">关联项目 *</label>
+          <select id="ng-project-id" name="project_id" required>
+            <option value="">-- 选择项目 --</option>
+            {% for p in projects %}
+              <option value="{{ p.project_id }}">{{ p.project_id }}{% if p.project_name %} ({{ p.project_name }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="ng-note">备注</label>
+          <input id="ng-note" name="note" type="text"
+                 placeholder="BMW 客户群 / 内部管理群" autocomplete="off">
+        </div>
+        <div class="modal__actions">
+          <button type="button" data-modal-close class="btn btn--ghost">取消</button>
+          <button type="submit" id="ng-submit" class="btn btn--primary">保存</button>
+        </div>
+      </form>
+      <div id="new-group-error" class="form-error" hidden></div>
+    </div>
+  </div>
+
+  {# 编辑群 modal #}
+  <div id="edit-group-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal__panel" role="dialog" aria-labelledby="edit-group-title">
+      <h2 id="edit-group-title" class="modal__title">编辑群</h2>
+      <form id="edit-group-form" autocomplete="off">
+        <div class="form-row">
+          <label class="form-row__label">群 chat_id</label>
+          <code id="eg-chat-id" style="font-size: 14px;"></code>
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="eg-note">备注</label>
+          <input id="eg-note" name="note" type="text" autocomplete="off">
+        </div>
+        <div class="form-row form-row--checkbox">
+          <label>
+            <input type="checkbox" id="eg-enabled">
+            <span>启用（同步给该 chat_id 下所有 mapping）</span>
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-row__label">关联项目</label>
+          <div id="eg-projects" class="form-info-fields__empty" style="font-style: normal; padding: 0;"></div>
+        </div>
+        <div class="modal__actions">
+          <button type="button" data-modal-close class="btn btn--ghost">取消</button>
+          <button type="submit" id="eg-submit" class="btn btn--primary">保存</button>
+        </div>
+      </form>
+      <div id="edit-group-error" class="form-error" hidden></div>
+    </div>
+  </div>
+
+  {% include "partials/_confirm_dialog.html" %}
+</main>
+{% endblock %}

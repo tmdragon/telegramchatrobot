@@ -601,6 +601,150 @@ async def get_groups(request: Request):
     return {"groups": _unique_groups(mappings)}
 
 
+# === 群视角管理(/groups 页面用) ===
+
+class NewGroupBody(BaseModel):
+    chat_id: str
+    project_id: str
+    note: str = ""
+    enabled: bool = True
+
+
+class UpdateGroupBody(BaseModel):
+    note: str
+    enabled: bool
+
+
+@router.get("/groups/manage")
+async def get_groups_manage(request: Request):
+    """列出所有按 chat_id 聚合的群,带项目列表 + 启用状态(给 /groups 管理页)。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    try:
+        groups = await asyncio.to_thread(mapping_repo.load_all_grouped)
+    except Exception as e:  # noqa: BLE001
+        log.exception("load_all_grouped failed")
+        raise HTTPException(status_code=502, detail=f"mapping load failed: {e}")
+    return {
+        "groups": [
+            {
+                "chat_id": g.chat_id,
+                "note": g.note,
+                "projects": g.projects,
+                "enabled_state": g.enabled_state,
+                "last_broadcast_at": g.last_broadcast_at,
+            }
+            for g in groups
+        ]
+    }
+
+
+@router.post("/groups/manage", status_code=201)
+async def post_groups_manage(request: Request, body: NewGroupBody):
+    """创建新群(写入该 chat_id 的第一条 mapping)。chat_id 必须唯一。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    chat_id = (body.chat_id or "").strip()
+    project_id = (body.project_id or "").strip()
+    if not chat_id or not _CHAT_ID_RE.match(chat_id):
+        raise HTTPException(status_code=400, detail="chat_id must be signed integer")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+    try:
+        exists = await asyncio.to_thread(mapping_repo.chat_id_exists, chat_id)
+        if exists:
+            raise HTTPException(status_code=409, detail=f"chat_id '{chat_id}' 已存在")
+        await asyncio.to_thread(
+            mapping_repo.create_group,
+            chat_id=chat_id,
+            project_id=project_id,
+            note=body.note.strip(),
+            enabled=body.enabled,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.exception("create_group failed (chat_id=%s)", chat_id)
+        raise HTTPException(status_code=502, detail=f"sheet write failed: {e}")
+    return {"chat_id": chat_id, "project_id": project_id, "note": body.note.strip(), "enabled": body.enabled}
+
+
+@router.put("/groups/manage/{chat_id}")
+async def put_groups_manage(request: Request, chat_id: str, body: UpdateGroupBody):
+    """更新该 chat_id 下所有 mapping 的 note + enabled。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    if not _CHAT_ID_RE.match(chat_id):
+        raise HTTPException(status_code=400, detail="invalid chat_id")
+    try:
+        await asyncio.to_thread(
+            mapping_repo.update_group,
+            chat_id=chat_id,
+            note=body.note.strip(),
+            enabled=body.enabled,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("update_group failed (chat_id=%s)", chat_id)
+        raise HTTPException(status_code=502, detail=f"sheet write failed: {e}")
+    return {"chat_id": chat_id, "note": body.note.strip(), "enabled": body.enabled}
+
+
+@router.delete("/groups/manage/{chat_id}")
+async def delete_groups_manage(request: Request, chat_id: str):
+    """软删除:把该 chat_id 下所有 mapping 的 enabled 设为 FALSE。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    if not _CHAT_ID_RE.match(chat_id):
+        raise HTTPException(status_code=400, detail="invalid chat_id")
+    try:
+        await asyncio.to_thread(mapping_repo.disable_group, chat_id)
+    except Exception as e:  # noqa: BLE001
+        log.exception("disable_group failed (chat_id=%s)", chat_id)
+        raise HTTPException(status_code=502, detail=f"sheet write failed: {e}")
+    return {"chat_id": chat_id, "deleted": True}
+
+
+@router.post("/groups/manage/{chat_id}/test-send")
+async def post_groups_manage_test_send(request: Request, chat_id: str):
+    """测试发送:用该群下第一个 project 的当前 cache 对象生成广播文案并发送。"""
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    cache = app.state.cache
+    bot_service = app.state.bot_service
+    if bot_service is None:
+        raise HTTPException(status_code=503, detail="Telegram bot not configured")
+    if not _CHAT_ID_RE.match(chat_id):
+        raise HTTPException(status_code=400, detail="invalid chat_id")
+
+    try:
+        mappings = await asyncio.to_thread(mapping_repo.load_all)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"mapping load failed: {e}")
+    group = [m for m in mappings if m.chat_id == chat_id]
+    if not group:
+        raise HTTPException(status_code=404, detail=f"no mapping for chat_id {chat_id}")
+    if not all(m.enabled for m in group):
+        raise HTTPException(status_code=400, detail="group disabled")
+
+    first = group[0]
+    project = cache.get(first.project_id) if cache else None
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"project {first.project_id} not in cache")
+
+    from src.bot.templates import render_broadcast
+
+    now = datetime.now(timezone.utc)
+    from src.models.project import Mapping as MappingModel
+    text = render_broadcast(project, MappingModel(
+        project_id=first.project_id, chat_id=chat_id, note=first.note, enabled=True,
+    ), now, exceeded_threshold=False)
+    try:
+        await bot_service.send_message(chat_id, text)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"telegram send failed: {e}")
+    return {"ok": True, "chat_id": chat_id, "message_preview": text}
+
+
 @router.post("/projects")
 async def post_project(request: Request, body: NewProjectBody):
     """新增项目(网页表单提交入口)。
