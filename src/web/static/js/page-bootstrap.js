@@ -20,6 +20,7 @@ const PAGE_MODULES = {
   }),
   detail: () => import("./inline-edit.js"),
   groups: () => import("./groups.js"),
+  mappings: () => import("./mappings-crud.js"),
 };
 
 const page = document.body.dataset.page || "overview";

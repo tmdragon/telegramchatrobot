@@ -27,7 +27,10 @@
       <tbody data-mappings-tbody>
         {% for m in mappings %}
           <tr class="mappings-row {% if not m.enabled %}row--warn{% endif %}"
-              data-project-id="{{ m.project_id }}">
+              data-project-id="{{ m.project_id }}"
+              data-chat-id="{{ m.chat_id or '' }}"
+              data-note="{{ m.note or '' }}"
+              data-enabled="{{ '1' if m.enabled else '0' }}">
             <td><a href="/project/{{ m.project_id }}">{{ m.project_id }}</a></td>
             <td>{{ m.chat_id or "—" }}</td>
             <td>{{ m.note or "" }}</td>
