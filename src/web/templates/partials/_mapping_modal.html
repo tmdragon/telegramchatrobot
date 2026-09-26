@@ -1,22 +1,27 @@
-<dialog class="modal" id="mapping-modal" data-modal-target="mapping">
-  <h2 class="modal__title" data-modal-title>编辑映射</h2>
-  <form method="dialog" class="modal__form" data-modal-form>
-    <input type="hidden" name="project_id" data-field="project_id" />
-    <label class="modal__field">
-      群 chat_id
-      <input type="text" name="chat_id" data-field="chat_id" required pattern="-?\d+" />
-    </label>
-    <label class="modal__field">
-      备注
-      <input type="text" name="note" data-field="note" />
-    </label>
-    <label class="modal__field">
-      启用
-      <input type="checkbox" name="enabled" data-field="enabled" />
-    </label>
-    <div class="modal__actions">
-      <button type="button" data-action="modal-cancel">取消</button>
-      <button type="submit" data-action="modal-submit">保存</button>
-    </div>
-  </form>
-</dialog>
+<div class="modal" id="mapping-modal" hidden aria-hidden="true">
+  <div class="modal__backdrop" data-modal-close></div>
+  <div class="modal__panel" role="dialog" aria-labelledby="mapping-modal-title">
+    <h2 id="mapping-modal-title" class="modal__title" data-modal-title>编辑映射</h2>
+    <form data-modal-form>
+      <input type="hidden" name="project_id" data-field="project_id" />
+      <div class="form-row">
+        <label class="form-row__label" for="mm-chat-id">群 chat_id</label>
+        <input id="mm-chat-id" type="text" name="chat_id" data-field="chat_id" required pattern="-?\d+" />
+      </div>
+      <div class="form-row">
+        <label class="form-row__label" for="mm-note">备注</label>
+        <input id="mm-note" type="text" name="note" data-field="note" />
+      </div>
+      <div class="form-row form-row--checkbox">
+        <label>
+          <input type="checkbox" name="enabled" data-field="enabled" />
+          <span>启用</span>
+        </label>
+      </div>
+      <div class="modal__actions">
+        <button type="button" class="btn btn--ghost" data-action="modal-cancel">取消</button>
+        <button type="submit" class="btn btn--primary" data-action="modal-submit">保存</button>
+      </div>
+    </form>
+  </div>
+</div>

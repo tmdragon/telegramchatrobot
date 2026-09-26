@@ -1,8 +1,11 @@
-<dialog class="modal" id="confirm-dialog" data-modal-target="confirm">
-  <h2 class="modal__title" data-confirm-title>确认操作</h2>
-  <p class="modal__body" data-confirm-body>确定要继续吗？</p>
-  <div class="modal__actions">
-    <button type="button" data-action="confirm-cancel">取消</button>
-    <button type="button" data-action="confirm-ok">确定</button>
+<div class="modal" id="confirm-dialog" hidden aria-hidden="true">
+  <div class="modal__backdrop" data-modal-close></div>
+  <div class="modal__panel" role="alertdialog" aria-labelledby="confirm-dialog-title">
+    <h2 id="confirm-dialog-title" class="modal__title" data-confirm-title>确认操作</h2>
+    <p class="modal__body" id="confirm-dialog-message" data-confirm-body>确定要继续吗？</p>
+    <div class="modal__actions">
+      <button type="button" class="btn btn--ghost" id="confirm-dialog-cancel">取消</button>
+      <button type="button" class="btn btn--primary" id="confirm-dialog-ok">确定</button>
+    </div>
   </div>
-</dialog>
+</div>
