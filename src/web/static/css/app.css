@@ -465,6 +465,79 @@ a:hover { text-decoration: underline; }
 .error-banner__title { color: var(--c-danger); font-weight: 600; margin-bottom: var(--s-1); display: block; }
 .error-banner__list { margin: 0; padding-left: var(--s-4); color: #82071e; font-size: 13px; }
 
+/* ===== Sidebar (左导航) ===== */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 200px;
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-border-soft);
+  display: flex; flex-direction: column;
+  padding: var(--s-4) 0;
+  z-index: 100;
+}
+.sidebar__brand {
+  padding: 0 var(--s-4) var(--s-4);
+  font-weight: 600; font-size: 15px;
+  border-bottom: 1px solid var(--c-border-soft);
+  color: var(--c-text);
+}
+.sidebar__nav {
+  flex: 1;
+  display: flex; flex-direction: column;
+  padding: var(--s-3) var(--s-2);
+  gap: 2px;
+}
+.sidebar__link {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: 8px var(--s-3);
+  font-size: 13px;
+  color: var(--c-text-muted);
+  text-decoration: none;
+  border-radius: var(--r-sm);
+  transition: background 0.12s, color 0.12s;
+}
+.sidebar__link:hover {
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  text-decoration: none;
+}
+.sidebar__link--active {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+  font-weight: 600;
+}
+.sidebar__link--active:hover {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+.sidebar__icon { font-size: 14px; width: 20px; text-align: center; }
+.sidebar__label { flex: 1; }
+.sidebar__footer {
+  padding: var(--s-3) var(--s-4) 0;
+  border-top: 1px solid var(--c-border-soft);
+  font-size: 11px; color: var(--c-text-subtle);
+}
+.main {
+  margin-left: 200px;
+  min-height: 100vh;
+}
+/* 窄屏:sidebar 收起成顶栏 */
+@media (max-width: 720px) {
+  .sidebar {
+    position: static;
+    width: 100%; bottom: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--c-border-soft);
+    padding: var(--s-2) 0;
+  }
+  .sidebar__nav { flex-direction: row; gap: var(--s-1); padding: 0 var(--s-2); }
+  .sidebar__link { padding: 6px 10px; }
+  .sidebar__footer { display: none; }
+  .sidebar__brand { display: none; }
+  .main { margin-left: 0; }
+}
+
 /* ===== Groups page ===== */
 .groups-header {
   display: flex; align-items: center; gap: var(--s-3);

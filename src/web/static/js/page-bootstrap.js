@@ -31,3 +31,8 @@ if (loader) {
     console.error("page module load failed", err);
   });
 }
+
+// 左导航 active 标记:根据 <body data-page> 高亮当前链接
+document.querySelectorAll(".sidebar__link").forEach((el) => {
+  if (el.dataset.pageTarget === page) el.classList.add("sidebar__link--active");
+});
