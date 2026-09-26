@@ -196,3 +196,65 @@ def test_create_group_rejects_duplicate_chat_id():
     import pytest
     with pytest.raises(ValueError, match="already exists"):
         repo.create_group(chat_id="-1001", project_id="PRJ-002", note="")
+
+
+def test_load_all_keeps_mappings_with_empty_project_id():
+    """load_all 应该保留空 project_id 的行(纯群映射,没关联项目)。
+    之前 if not pid: continue 会跳过这种行;现在保留以便 load_all_grouped 能聚合。
+    """
+    headers = ["项目编号", "群 chat_id", "备注", "是否启用", "上次播报时间"]
+    rows = [
+        ["",       "-1001", "纯群映射", "TRUE", ""],  # 空 project_id → 保留
+        ["PRJ-001", "-1001", "",         "TRUE", ""],  # 正常映射
+        ["",        "-1002", "",          "TRUE", ""],  # 另一个空映射
+    ]
+    fake_ws = _make_ws(headers, rows)
+    fake_client = MagicMock()
+    fake_client.open.return_value.worksheet.return_value = fake_ws
+
+    repo = MappingRepo(fake_client)
+    mappings = repo.load_all()
+
+    # 不该跳过任何行
+    assert len(mappings) == 3
+    # 空 project_id 也被保留
+    pids = [m.project_id for m in mappings]
+    assert "" in pids
+
+
+def test_create_group_with_empty_project_id():
+    """create_group 接受空 project_id,只创建纯群映射(不关联任何项目)。"""
+    headers = ["项目编号", "群 chat_id", "备注", "是否启用", "上次播报时间"]
+    fake_ws = _make_ws(headers, [])
+    fake_client = MagicMock()
+    fake_client.open.return_value.worksheet.return_value = fake_ws
+
+    repo = MappingRepo(fake_client)
+    repo.create_group(chat_id="-1001", project_id="", note="BMW 客户群")
+
+    fake_ws.append_row.assert_called_once()
+    args = fake_ws.append_row.call_args[0][0]
+    assert args[0] == ""              # project_id 列空
+    assert args[1] == "-1001"
+    assert args[2] == "BMW 客户群"
+
+
+def test_load_all_grouped_includes_groups_with_no_projects():
+    """load_all_grouped 应该包含纯群映射(没有任何 project_id 关联)。"""
+    headers = ["项目编号", "群 chat_id", "备注", "是否启用", "上次播报时间"]
+    rows = [
+        ["",         "-1001", "BMW 客户群", "TRUE", ""],
+        ["PRJ-001", "-1002", "Audi 客户",   "TRUE", ""],
+    ]
+    fake_ws = _make_ws(headers, rows)
+    fake_client = MagicMock()
+    fake_client.open.return_value.worksheet.return_value = fake_ws
+
+    repo = MappingRepo(fake_client)
+    groups = repo.load_all_grouped()
+
+    chat_ids = sorted(g.chat_id for g in groups)
+    assert chat_ids == ["-1001", "-1002"]
+
+    g1 = next(g for g in groups if g.chat_id == "-1001")
+    assert g1.projects == []  # 纯群映射,无关联项目

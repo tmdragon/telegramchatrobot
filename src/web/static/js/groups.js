@@ -38,8 +38,8 @@ async function _submitNewGroup(form) {
     note: (fd.get("note") || "").trim(),
     enabled: true,
   };
-  if (!body.chat_id || !body.project_id) {
-    _showError(form, "chat_id 和 project_id 不能为空");
+  if (!body.chat_id) {
+    _showError(form, "chat_id 不能为空(项目可选)");
     return;
   }
   const btn = form.querySelector("#ng-submit");

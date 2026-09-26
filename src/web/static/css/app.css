@@ -593,6 +593,13 @@ a:hover { text-decoration: underline; }
 .groups-row__projects {
   display: flex; flex-wrap: wrap; gap: 4px;
 }
+.groups-row__empty-hint {
+  font-size: 12px; color: var(--c-text-subtle); font-style: italic;
+}
+.form-hint {
+  font-size: 11px; color: var(--c-text-subtle); font-weight: normal;
+  margin-left: 4px;
+}
 .chip {
   display: inline-flex;
   padding: 2px 8px;

@@ -38,9 +38,13 @@
               <td>{{ g.note or "—" }}</td>
               <td>
                 <div class="groups-row__projects">
-                  {% for p in g.projects %}
-                    <a href="/project/{{ p }}" class="chip chip--project">{{ p }}</a>
-                  {% endfor %}
+                  {% if g.projects %}
+                    {% for p in g.projects %}
+                      <a href="/project/{{ p }}" class="chip chip--project">{{ p }}</a>
+                    {% endfor %}
+                  {% else %}
+                    <span class="groups-row__empty-hint">未关联项目</span>
+                  {% endif %}
                 </div>
               </td>
               <td>
@@ -79,9 +83,9 @@
                  placeholder="负数,如 -1001234567890" required autocomplete="off">
         </div>
         <div class="form-row">
-          <label class="form-row__label" for="ng-project-id">关联项目 *</label>
-          <select id="ng-project-id" name="project_id" required>
-            <option value="">-- 选择项目 --</option>
+          <label class="form-row__label" for="ng-project-id">关联项目 <span class="form-hint">(可选)</span></label>
+          <select id="ng-project-id" name="project_id">
+            <option value="">-- 不关联,创建纯群映射 --</option>
             {% for p in projects %}
               <option value="{{ p.project_id }}">{{ p.project_id }}{% if p.project_name %} ({{ p.project_name }}){% endif %}</option>
             {% endfor %}

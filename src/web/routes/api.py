@@ -605,7 +605,7 @@ async def get_groups(request: Request):
 
 class NewGroupBody(BaseModel):
     chat_id: str
-    project_id: str
+    project_id: str = ""  # 可选:不关联任何项目也能创建纯群映射
     note: str = ""
     enabled: bool = True
 
@@ -648,8 +648,7 @@ async def post_groups_manage(request: Request, body: NewGroupBody):
     project_id = (body.project_id or "").strip()
     if not chat_id or not _CHAT_ID_RE.match(chat_id):
         raise HTTPException(status_code=400, detail="chat_id must be signed integer")
-    if not project_id:
-        raise HTTPException(status_code=400, detail="project_id is required")
+    # project_id 现在可选 — 可以创建"纯群映射"(后续再关联项目)
     try:
         exists = await asyncio.to_thread(mapping_repo.chat_id_exists, chat_id)
         if exists:
@@ -657,7 +656,7 @@ async def post_groups_manage(request: Request, body: NewGroupBody):
         await asyncio.to_thread(
             mapping_repo.create_group,
             chat_id=chat_id,
-            project_id=project_id,
+            project_id=project_id,  # 可能为空
             note=body.note.strip(),
             enabled=body.enabled,
         )
@@ -726,7 +725,13 @@ async def post_groups_manage_test_send(request: Request, chat_id: str):
     if not all(m.enabled for m in group):
         raise HTTPException(status_code=400, detail="group disabled")
 
-    first = group[0]
+    # 取该 chat_id 下第一个有 project_id 的 mapping(纯群映射的行跳过)
+    first = next((m for m in group if m.project_id), None)
+    if first is None:
+        raise HTTPException(
+            status_code=400,
+            detail="群下没有关联任何项目,无法渲染广播文案(请先在项目详情里关联此群)",
+        )
     project = cache.get(first.project_id) if cache else None
     if project is None:
         raise HTTPException(status_code=404, detail=f"project {first.project_id} not in cache")

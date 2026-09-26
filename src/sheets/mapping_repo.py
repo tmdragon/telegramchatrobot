@@ -48,11 +48,13 @@ class MappingRepo:
             if len(row) < 5:
                 row = row + [""] * (5 - len(row))
             pid = row[0].strip()
-            if not pid:
+            cid = row[1].strip()
+            # 必须有 chat_id;project_id 可为空(纯群映射,无关联项目)
+            if not cid:
                 continue
             mappings.append(Mapping(
                 project_id=pid,
-                chat_id=row[1].strip(),
+                chat_id=cid,
                 note=row[2].strip(),
                 enabled=_truthy(row[3]),
                 last_broadcast_at=row[4].strip() or None,
@@ -117,7 +119,8 @@ class MappingRepo:
             out.append(GroupView(
                 chat_id=chat_id,
                 note=note,
-                projects=[m.project_id for m in ms],
+                # 过滤空 project_id(纯群映射的行不进 projects 列表)
+                projects=[m.project_id for m in ms if m.project_id],
                 enabled_state=state,
                 last_broadcast_at=last_broadcast,
             ))
