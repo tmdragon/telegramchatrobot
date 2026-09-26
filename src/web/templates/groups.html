@@ -125,9 +125,21 @@
             <span>启用（同步给该 chat_id 下所有 mapping）</span>
           </label>
         </div>
-        <div class="form-row">
-          <label class="form-row__label">关联项目</label>
-          <div id="eg-projects" class="form-info-fields__empty" style="font-style: normal; padding: 0;"></div>
+        <hr class="form-divider">
+        <div class="form-section">
+          <div class="form-section__title">📎 关联项目</div>
+          {# 已关联(待保存)— 绿色边框 chip,带 × #}
+          <div id="eg-projects-current" class="eg-projects-list"></div>
+          {# 全部项目下拉 + 添加按钮 #}
+          <div class="form-row" style="margin-top: var(--s-3);">
+            <select id="eg-projects-add-select">
+              <option value="">-- 选择项目以添加 --</option>
+              {% for p in projects %}
+                <option value="{{ p.project_id }}" data-project-name="{{ p.project_name or '' }}">{{ p.project_id }}{% if p.project_name %} ({{ p.project_name }}){% endif %}</option>
+              {% endfor %}
+            </select>
+            <button type="button" id="eg-projects-add-btn" class="btn btn--primary" style="margin-top: var(--s-2);">+ 添加</button>
+          </div>
         </div>
         <div class="modal__actions">
           <button type="button" data-modal-close class="btn btn--ghost">取消</button>

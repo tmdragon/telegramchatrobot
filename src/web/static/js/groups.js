@@ -2,12 +2,21 @@
 //
 // 流程：
 // 1. "+ 新建群" → modal → POST /api/groups/manage
-// 2. 行内"编辑" → modal → PUT /api/groups/manage/{chat_id}
+// 2. 行内"编辑" → modal → PUT /api/groups/manage/{chat_id}(note/enabled)
+//    + PUT /api/groups/manage/{chat_id}/projects(关联项目列表)
 // 3. 行内"停用" → confirmDialog → DELETE /api/groups/manage/{chat_id}
 // 4. 行内"测试" → POST /api/groups/manage/{chat_id}/test-send
+//
+// 关联项目子逻辑在 edit-projects.js
 
 import { postJson, putJson, delJson } from "./api.js";
 import { confirmDialog } from "./confirm-dialog.js";
+import {
+  initEditState,
+  renderEditProjects,
+  getEditProjects,
+  wireAddProjectControl,
+} from "./edit-projects.js";
 
 function _openModal(modal) {
   modal.hidden = false;
@@ -59,23 +68,10 @@ function _openEditModal(row, modal, form) {
   const chatId = row.dataset.chatId;
   form.querySelector("#eg-chat-id").textContent = chatId;
   form.querySelector("#eg-note").value = row.dataset.note || "";
-  // enabled_state: 'all' → checked, 'none'/'partial' → unchecked
   form.querySelector("#eg-enabled").checked = (row.dataset.enabledState === "all");
-
   const projects = (row.dataset.projects || "").split(",").filter(Boolean);
-  const projEl = form.querySelector("#eg-projects");
-  if (projects.length === 0) {
-    projEl.textContent = "（无）";
-  } else {
-    projEl.innerHTML = "";
-    projects.forEach((p) => {
-      const a = document.createElement("a");
-      a.href = `/project/${encodeURIComponent(p)}`;
-      a.className = "chip chip--project";
-      a.textContent = p;
-      projEl.appendChild(a);
-    });
-  }
+  initEditState(chatId, projects);
+  renderEditProjects();
   _clearError(form);
   _openModal(modal);
 }
@@ -90,7 +86,12 @@ async function _submitEditGroup(form) {
   btn.disabled = true;
   btn.textContent = "保存中...";
   try {
+    // 1. 更新 note + enabled
     await putJson(`/api/groups/manage/${encodeURIComponent(chatId)}`, body);
+    // 2. 同步关联项目
+    await putJson(`/api/groups/manage/${encodeURIComponent(chatId)}/projects`, {
+      project_ids: getEditProjects(),
+    });
     window.location.reload();
   } catch (e) {
     _showError(form, `保存失败: ${e.detail || e.message}`);
@@ -153,6 +154,9 @@ export function init() {
     });
   }
 
+  // 编辑群:添加项目按钮
+  wireAddProjectControl();
+
   // 行内按钮(委托)
   const tbody = document.querySelector("[data-groups-tbody]");
   if (tbody) {
@@ -165,7 +169,7 @@ export function init() {
       if (action === "group-edit" && row && editModal && editForm) {
         _openEditModal(row, editModal, editForm);
       } else if (action === "group-delete") {
-        const ok = await confirmDialog(`停用群 ${chatId}（该 chat_id 下所有映射会被设为停用）?`);
+        const ok = await confirmDialog(`停用群 ${chatId}(该 chat_id 下所有映射会被设为停用)?`);
         if (ok) await _deleteGroup(chatId);
       } else if (action === "group-test-send") {
         await _testSend(chatId);

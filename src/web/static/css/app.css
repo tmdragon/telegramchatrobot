@@ -600,6 +600,30 @@ a:hover { text-decoration: underline; }
   font-size: 11px; color: var(--c-text-subtle); font-weight: normal;
   margin-left: 4px;
 }
+/* 编辑群 modal 里可移除的项目 chip */
+.eg-projects-list {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: var(--s-3);
+}
+.eg-project-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px;
+  background: var(--c-primary-soft);
+  border: 1px solid var(--c-primary);
+  border-radius: var(--r-pill);
+  font-size: 12px;
+}
+.eg-project-chip a {
+  color: var(--c-primary); text-decoration: none; font-weight: 500;
+}
+.eg-project-chip a:hover { text-decoration: underline; }
+.eg-project-chip__name { color: var(--c-text-muted); font-size: 11px; }
+.eg-project-chip__remove {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--c-danger); font-size: 16px; line-height: 1;
+  padding: 0 2px;
+}
+.eg-project-chip__remove:hover { color: #b91c1c; }
 .chip {
   display: inline-flex;
   padding: 2px 8px;

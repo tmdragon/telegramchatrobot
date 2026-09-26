@@ -615,6 +615,10 @@ class UpdateGroupBody(BaseModel):
     enabled: bool
 
 
+class UpdateGroupProjectsBody(BaseModel):
+    project_ids: list[str]  # desired set of project_ids;空字符串被忽略
+
+
 @router.get("/groups/manage")
 async def get_groups_manage(request: Request):
     """列出所有按 chat_id 聚合的群,带项目列表 + 启用状态(给 /groups 管理页)。"""
@@ -701,6 +705,27 @@ async def delete_groups_manage(request: Request, chat_id: str):
         log.exception("disable_group failed (chat_id=%s)", chat_id)
         raise HTTPException(status_code=502, detail=f"sheet write failed: {e}")
     return {"chat_id": chat_id, "deleted": True}
+
+
+@router.put("/groups/manage/{chat_id}/projects")
+async def put_groups_manage_projects(request: Request, chat_id: str, body: UpdateGroupProjectsBody):
+    """同步该 chat_id 下 enabled 的 mappings 成给定 project_ids 集合。
+
+    - desired 里有但当前 enabled 没有:创建或重新启用
+    - 当前 enabled 但不在 desired:软删除(enabled=false,保留 sheet 行)
+    """
+    app = request.app
+    mapping_repo = app.state.mapping_repo
+    if not _CHAT_ID_RE.match(chat_id):
+        raise HTTPException(status_code=400, detail="invalid chat_id")
+    try:
+        await asyncio.to_thread(
+            mapping_repo.set_group_projects, chat_id, body.project_ids
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("set_group_projects failed (chat_id=%s)", chat_id)
+        raise HTTPException(status_code=502, detail=f"sheet write failed: {e}")
+    return {"chat_id": chat_id, "project_ids": body.project_ids}
 
 
 @router.post("/groups/manage/{chat_id}/test-send")

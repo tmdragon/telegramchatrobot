@@ -149,6 +149,10 @@ class MappingRepo:
         """
         if self.chat_id_exists(chat_id):
             raise ValueError(f"chat_id {chat_id!r} already exists")
+        self._append_mapping(chat_id, project_id, note, enabled)
+
+    def _append_mapping(self, chat_id: str, project_id: str, note: str, enabled: bool) -> None:
+        """底层:无守卫地 append 一行 mapping(给 set_group_projects 复用)。"""
         ws = self._ws()
         row_data = [
             project_id,
@@ -173,3 +177,40 @@ class MappingRepo:
         rows = self._find_rows_by_chat_id(ws, chat_id)
         for row_idx in rows:
             ws.update_cell(row_idx, 4, "FALSE")
+
+    def set_mapping_enabled(self, project_id: str, enabled: bool) -> bool:
+        """设置单条 mapping(按 project_id)的 enabled。找不到返回 False。"""
+        ws = self._ws()
+        row_idx = self._find_row(ws, project_id)
+        if row_idx is None:
+            return False
+        ws.update_cell(row_idx, 4, "TRUE" if enabled else "FALSE")
+        return True
+
+    def set_group_projects(self, chat_id: str, project_ids: list[str]) -> None:
+        """同步该 chat_id 下 enabled 的 mappings 成给定 project_ids 集合。
+
+        - desired - current_enabled:创建新 mapping(或重新启用已存在的)
+        - current_enabled - desired:把 enabled 设为 FALSE(软删除,保留 sheet 行)
+        - 已 disabled 但在 desired:重新启用
+        """
+        desired = set(p for p in project_ids if p)  # 过滤空字符串
+        mappings = self.load_all()
+        # 该 chat_id 下所有 mappings(含 disabled)
+        all_for_chat = [m for m in mappings if m.chat_id == chat_id and m.project_id]
+        current_enabled = {m.project_id for m in all_for_chat if m.enabled}
+
+        # 添加:desired 里有但当前 enabled 没有
+        for pid in desired - current_enabled:
+            existing = next((m for m in all_for_chat if m.project_id == pid), None)
+            if existing is not None:
+                # 重新启用(保留 history)
+                self.set_mapping_enabled(pid, True)
+            else:
+                # 创建新 mapping(chat_id 已存在;用底层 append 跳过守卫)
+                self._append_mapping(chat_id, project_id=pid, note="", enabled=True)
+
+        # 移除:当前 enabled 但不在 desired → 软删除
+        for m in all_for_chat:
+            if m.enabled and m.project_id not in desired:
+                self.set_mapping_enabled(m.project_id, False)

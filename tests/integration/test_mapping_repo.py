@@ -258,3 +258,38 @@ def test_load_all_grouped_includes_groups_with_no_projects():
 
     g1 = next(g for g in groups if g.chat_id == "-1001")
     assert g1.projects == []  # 纯群映射,无关联项目
+
+
+def test_set_group_projects_adds_and_removes():
+    """set_group_projects 应该把该 chat_id 下 enabled 的 mappings 同步成给定集合。
+    - desired - current:新项目,要创建(或重新启用已停用的)
+    - current - desired:多余项目,停用(enabled=false)
+    """
+    headers = ["项目编号", "群 chat_id", "备注", "是否启用", "上次播报时间"]
+    rows = [
+        # 当前 enabled:PRJ-001, PRJ-002
+        ["PRJ-001", "-1001", "ok", "TRUE",  ""],
+        ["PRJ-002", "-1001", "ok", "TRUE",  ""],
+        # 已停用:PRJ-X(disabled,user 之前移除了)
+        ["PRJ-X",   "-1001", "ok", "FALSE", ""],
+        # 不属于本群的不动
+        ["PRJ-003", "-1002", "other", "TRUE", ""],
+    ]
+    fake_ws = _make_ws(headers, rows)
+    def _find(value):
+        rows_idx = {"PRJ-001": 2, "PRJ-002": 3, "PRJ-X": 4, "PRJ-003": 5}
+        return MagicMock(row=rows_idx.get(value))
+    fake_ws.find.side_effect = _find
+    fake_client = MagicMock()
+    fake_client.open.return_value.worksheet.return_value = fake_ws
+
+    repo = MappingRepo(fake_client)
+    # desired = PRJ-001, PRJ-002, PRJ-003(新增 PRJ-003;PRJ-X 保持 disabled;PRJ-001/002 不动)
+    repo.set_group_projects("-1001", project_ids=["PRJ-001", "PRJ-002", "PRJ-003"])
+
+    # PRJ-X 行应该被写 FALSE(已经 FALSE,可能再写一次;无害)
+    # PRJ-003 应该被追加(append_row 调一次)
+    fake_ws.append_row.assert_called_once()
+    args = fake_ws.append_row.call_args[0][0]
+    assert args[0] == "PRJ-003"
+    assert args[1] == "-1001"
