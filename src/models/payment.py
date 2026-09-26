@@ -17,11 +17,13 @@ class PaymentStatus(str, Enum):
 # 别名表（spec §3.2 类似结构）
 PAYMENT_ALIASES: dict[PaymentStatus, list[str]] = {
     PaymentStatus.PAID: [
-        "已回款", "已收款", "已结款", "对方已回款", "已支付",
+        "已回款", "已收款", "已结款", "已结算",
+        "对方已回款", "对方已结算", "已支付",
         "paid", "PAID",
     ],
     PaymentStatus.UNPAID: [
-        "未回款", "未收款", "待回款", "对方未回款", "未支付",
+        "未回款", "未收款", "待回款", "未结算",
+        "对方未回款", "对方未结算", "未支付",
         "unpaid", "UNPAID",
     ],
 }

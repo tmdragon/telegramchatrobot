@@ -390,6 +390,21 @@ a:hover { text-decoration: underline; }
   transition: background 0.15s;
 }
 .overview-table tbody tr:hover { background: var(--c-surface-2); }
+/* 重点关注行:已发布(PUBLISHED)但未回款(UNPAID) — 商务上需要催收 */
+.overview-row[data-status="PUBLISHED"][data-payment="UNPAID"] {
+  background: rgba(220, 38, 38, 0.06);
+  box-shadow: inset 4px 0 0 var(--c-danger);
+}
+.overview-row[data-status="PUBLISHED"][data-payment="UNPAID"]:hover {
+  background: rgba(220, 38, 38, 0.10);
+}
+/* 行的 payment 列旁加 ⚠ 标识 */
+.overview-row[data-status="PUBLISHED"][data-payment="UNPAID"] td:first-child::before {
+  content: "⚠ ";
+  color: var(--c-danger);
+  font-weight: 700;
+  margin-right: 2px;
+}
 .overview-row__id {
   font-family: var(--f-mono);
   font-size: 12px;

@@ -81,3 +81,13 @@ def test_payment_badge_no_record():
 def test_payment_badge_returns_markup():
     result = payment_badge(PaymentStatus.PAID)
     assert isinstance(result, markupsafe.Markup)
+
+
+from src.models.payment import PaymentStatus, normalize_payment
+
+
+def test_normalize_payment_jiesuan_aliases():
+    """'已结算' / '未结算' 应该是 PAID / UNPAID 的别名(国内常见说法)。"""
+    assert normalize_payment("已结算") == PaymentStatus.PAID
+    assert normalize_payment("未结算") == PaymentStatus.UNPAID
+    assert normalize_payment("  已结算  ") == PaymentStatus.PAID  # strip
