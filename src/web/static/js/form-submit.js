@@ -15,6 +15,11 @@ export async function submitNewProject(form, errorEl) {
     open_service_url: (fd.get("open_service_url") || "").trim(),
     adjust_key: (fd.get("adjust_key") || "").trim(),
     b_entry_name: (fd.get("b_entry_name") || "").trim(),
+    // === 对账金额(可选) ===
+    amount: (() => {
+      const v = (fd.get("amount") || "").trim();
+      return v === "" ? null : Number(v);
+    })(),
   };
   // info 字段（从动态渲染的 inputs 收集；空值不发）
   form.querySelectorAll("input[data-info-key]").forEach((el) => {

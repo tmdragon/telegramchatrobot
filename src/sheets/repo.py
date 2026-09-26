@@ -352,6 +352,29 @@ class SheetRepo:
                 return idx
         return None
 
+    def append_reconciliation(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        project_id: str,
+        amount: float,
+    ) -> None:
+        """在对账表里追加一行。
+
+        对账表 schema(B/D 列写值,其他列由用户管理):
+        - B 列 = 项目编号
+        - D 列 = 应结算金额
+
+        用 update_cell 精确写入,避免覆盖其他列。
+        """
+        sh = self.client.open_by_key(spreadsheet_id)
+        ws = sh.worksheet(worksheet_name)
+        all_values = ws.get_all_values()
+        next_row = len(all_values) + 1
+        # B 列 = 2(项目编号),D 列 = 4(应结算金额)
+        ws.update_cell(next_row, 2, project_id)
+        ws.update_cell(next_row, 4, amount)
+
     def update_cell_by_header(
         self,
         spreadsheet_id: str,

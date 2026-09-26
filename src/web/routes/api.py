@@ -54,6 +54,8 @@ class NewProjectBody(BaseModel):
     sha1: str = ""
     sha256: str = ""
     hash_value: str = ""
+    # === 对账字段(可选:如果有 reconciliation sheet 且传了 amount 就写对账表)===
+    amount: Optional[float] = None
     mapping: Optional[NewMappingBody] = None
 
 
@@ -876,9 +878,28 @@ async def post_project(request: Request, body: NewProjectBody):
         log.exception("cache refresh failed after new project %s", pid)
         # cache 暂留旧数据,但 sheet 已成功,下次 refresh 会同步
 
+    # 5. 写对账表(可选:如果配了 reconciliation sheet 且传了 amount)
+    #    对账表失败不阻塞项目创建,只记日志
+    reconciliation_warning = None
+    if body.amount is not None:
+        recon = cfg.get_spreadsheet_by_role("reconciliation")
+        if recon is not None:
+            try:
+                await asyncio.to_thread(
+                    sheet_repo.append_reconciliation,
+                    recon.id, recon.name, pid, body.amount,
+                )
+            except Exception as e:  # noqa: BLE001
+                log.exception("reconciliation write failed (project=%s)", pid)
+                reconciliation_warning = (
+                    f"项目已创建,但对账表写入失败: {type(e).__name__}: {e}"
+                )
+
     return {
         "ok": True,
         "project_id": pid,
         "status": "已下单",
         "mapping_chat_id": body.mapping.chat_id if body.mapping else None,
+        "amount": body.amount,
+        "reconciliation_warning": reconciliation_warning,
     }

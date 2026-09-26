@@ -31,6 +31,10 @@ class AppConfig:
     # 播报 / UI 显示用的时区（IANA 名，如 "Asia/Shanghai"；默认 UTC）
     display_timezone: str = "UTC"
 
+    def get_spreadsheet_by_role(self, role: str) -> SpreadsheetConfig | None:
+        """按 role 查 spreadsheet 配置;不存在返回 None。"""
+        return next((s for s in self.spreadsheets if s.role == role), None)
+
 
 def _read_yaml(path: Path) -> dict:
     if not path.exists():

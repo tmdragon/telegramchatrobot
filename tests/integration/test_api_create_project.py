@@ -475,3 +475,70 @@ def test_post_groups_manage_409_on_duplicate_chat_id():
     r = client.post("/api/groups/manage", json=body)
     assert r.status_code == 409
     assert "exists" in r.json()["detail"].lower() or "已存在" in r.json()["detail"]
+
+
+def test_post_project_with_amount_writes_reconciliation():
+    """POST /api/projects 带 amount 时,如果有 reconciliation 配置,应该 append_reconciliation。"""
+    sheet_repo = MagicMock()
+    sheet_repo.find_row_by_project_id.return_value = None
+    sheet_repo.fetch_all.return_value = []
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    # 配置: master + reconciliation 两张表
+    from src.config import SpreadsheetConfig
+    cfg_mock.spreadsheets = [
+        SpreadsheetConfig(id="master-id", name="工作表1", role="master"),
+        SpreadsheetConfig(id="recon-id", name="财务统计", role="reconciliation"),
+    ]
+    cfg_mock.get_spreadsheet_by_role = lambda role: next(
+        (s for s in cfg_mock.spreadsheets if s.role == role), None
+    )
+    store = MagicMock()
+    mapping_repo = MagicMock()
+    from src.web.app import create_app
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {
+        "project_id": "WW-RECON",
+        "project_name": "对账测试",
+        "amount": 1500.50,
+    }
+    r = client.post("/api/projects", json=body)
+    assert r.status_code == 200
+    body_resp = r.json()
+    assert body_resp["amount"] == 1500.50
+    assert body_resp["reconciliation_warning"] is None
+    # append_reconciliation 应该被调用
+    sheet_repo.append_reconciliation.assert_called_once_with(
+        "recon-id", "财务统计", "WW-RECON", 1500.50,
+    )
+
+
+def test_post_project_without_amount_skips_reconciliation():
+    """不带 amount 时,append_reconciliation 不被调用(向后兼容)。"""
+    sheet_repo = MagicMock()
+    sheet_repo.find_row_by_project_id.return_value = None
+    sheet_repo.fetch_all.return_value = []
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [
+        MagicMock(id="master-id", name="工作表1", role="master"),
+    ]
+    cfg_mock.get_spreadsheet_by_role = lambda role: None
+    store = MagicMock()
+    mapping_repo = MagicMock()
+    from src.web.app import create_app
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    client = TestClient(app)
+
+    body = {"project_id": "WW-NOAMT", "project_name": "无金额"}
+    r = client.post("/api/projects", json=body)
+    assert r.status_code == 200
+    sheet_repo.append_reconciliation.assert_not_called()

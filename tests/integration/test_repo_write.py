@@ -319,3 +319,61 @@ def test_append_row_writes_store_url():
     written_row = fake_ws.append_row.call_args[0][0]
     assert written_row[0] == "WW-700"
     assert written_row[2] == "https://play.google.com/store/apps/details?id=com.ww.app"
+
+def test_append_reconciliation_writes_row_with_amount():
+    """对账表: B 列 = 项目编号, D 列 = 应结算金额(向后兼容 — 现在用 update_cell 写 B/D)。"""
+    fake_ws = MagicMock()
+    fake_ws.title = "对账表"
+    fake_ws.get_all_values.return_value = [["header"]]  # 1 row, next_row = 2
+
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    repo.append_reconciliation(
+        spreadsheet_id="recon-ss-id",
+        worksheet_name="对账表",
+        project_id="WW-NEW-1",
+        amount=1234.56,
+    )
+
+    fake_client.open_by_key.assert_called_once_with("recon-ss-id")
+    update_calls = [(c.args[0], c.args[1], c.args[2]) for c in fake_ws.update_cell.call_args_list]
+    assert (2, 2, "WW-NEW-1") in update_calls   # B 列
+    assert (2, 4, 1234.56) in update_calls      # D 列
+    fake_ws.append_row.assert_not_called()
+
+
+def test_append_reconciliation_writes_to_columns_B_and_D():
+    """对账表 schema 固定: B 列 = 项目编号, D 列 = 应结算金额。
+
+    用 update_cell 精确写入,不依赖表头检测。
+    """
+    fake_ws = MagicMock()
+    fake_ws.title = "财务统计"
+    # 当前已有 3 行,新行应该是第 4 行
+    fake_ws.get_all_values.return_value = [
+        ["header1", "header2", "header3", "header4"],  # header
+        ["", "", "", ""],                                # row 1 (空)
+        ["", "WW-OLD", "", "100"],                       # row 2
+        ["", "WW-OLD2", "", "200"],                      # row 3
+    ]
+
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    repo = SheetRepo(fake_client)
+    repo.append_reconciliation(
+        spreadsheet_id="15QtENpCkejFThVrQEq9fkXtWdGhUuW4DAh9XOVTHTn4",
+        worksheet_name="财务统计",
+        project_id="WW-NEW",
+        amount=500,
+    )
+
+    # 期望写入第 4 行(next_row = len(all_values) + 1 = 5)
+    # 但 len=4,所以 next_row=5
+    update_calls = [(c.args[0], c.args[1], c.args[2]) for c in fake_ws.update_cell.call_args_list]
+    assert (5, 2, "WW-NEW") in update_calls  # B 列
+    assert (5, 4, 500) in update_calls       # D 列
+    # 不应该有 append_row 调用
+    fake_ws.append_row.assert_not_called()
