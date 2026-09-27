@@ -52,6 +52,8 @@ class Project:
     next_store_check_at: Optional[datetime] = None
     last_store_check_at: Optional[datetime] = None
     last_store_check_result: Optional[str] = None  # 'published' | 'not_found' | 'pending' | 'error'
+    # 上线时间:状态变为 PUBLISHED 时的 UTC 时间;便于管理界面展示"何时上架"
+    published_at: Optional[datetime] = None
 
 
 @dataclass

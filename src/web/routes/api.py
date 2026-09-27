@@ -104,6 +104,7 @@ async def get_projects(request: Request):
                 "store_url": s.store_url,
                 "last_store_check_result": s.last_store_check_result,
                 "next_store_check_at": s.next_store_check_at.isoformat() if s.next_store_check_at else None,
+                "published_at": s.published_at.isoformat() if s.published_at else None,
             }
             for s in summaries
         ],
@@ -367,6 +368,9 @@ async def put_field(request: Request, project_id: str, field_id: str, body: Fiel
             # 优先返回 status_raw(原 sheet 文本),播报里会显示老的字符串
             p.status_raw = verified
             p.status_changed_at = now
+            # 上线时间:状态变成 PUBLISHED 时记录(给管理界面展示)
+            if new_status_code.value == "PUBLISHED":
+                p.published_at = now
             status_changed = True
 
     # 状态变更 → 立即播报(跟 post_refresh 流程对齐;

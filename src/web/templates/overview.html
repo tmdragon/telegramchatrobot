@@ -239,7 +239,8 @@
             <th style="width: 16%;">当前状态</th>
             <th style="width: 12%;">回款</th>
             <th style="width: 14%;">停留</th>
-            <th style="width: 22%; text-align: right;">操作</th>
+            <th style="width: 12%;">上线时间</th>
+            <th style="width: 10%; text-align: right;">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -252,7 +253,8 @@
                 data-payment="{{ s.payment_status.value if s.payment_status else 'NONE' }}"
                 data-store-status="{{ s.last_store_check_result or '' }}"
                 data-store-next="{{ s.next_store_check_at.isoformat() if s.next_store_check_at else '' }}"
-                data-store-url="{{ s.store_url or '' }}">
+                data-store-url="{{ s.store_url or '' }}"
+                data-published-at="{{ s.published_at.isoformat() if s.published_at else '' }}">
               <td>
                 <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
               </td>
@@ -275,6 +277,16 @@
                 <span class="overview-row__dwell" data-dwell-seconds="{{ s.dwell_seconds }}">
                   {{ s.dwell_seconds | humanize_duration }}
                 </span>
+              </td>
+              <td>
+                {% if s.published_at %}
+                  <span class="overview-row__published-at"
+                        title="{{ s.published_at.isoformat() }}">
+                    {{ s.published_at.strftime('%Y-%m-%d %H:%M') }}
+                  </span>
+                {% else %}
+                  <span class="overview-row__published-at overview-row__published-at--empty">—</span>
+                {% endif %}
               </td>
               <td style="text-align: right;">
                 <a href="/project/{{ s.project_id }}" class="overview-row__view">查看 →</a>

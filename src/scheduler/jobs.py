@@ -168,6 +168,9 @@ async def trigger_store_check_now(
             # 否则 broadcast 会发"复审中"而非"已上架"——用户投诉的根因。
             refreshed = cache.get(project_id)
             if refreshed is not None:
+                # 系统检测到上架:记录发布时间(给管理界面展示"何时上架")
+                if refreshed.status and refreshed.status.value == "PUBLISHED":
+                    refreshed.published_at = now
                 try:
                     await broadcast_svc.broadcast_project(
                         refreshed, trigger=BroadcastTrigger.STATUS_CHANGE,
@@ -300,6 +303,9 @@ async def _store_monitor_wrapper(
                 # 用 refresh 后的最新 project（status_raw="已上架"）发客户群。
                 refreshed = cache.get(project.project_id)
                 if refreshed is not None:
+                    # 系统检测到上架:记录发布时间(给管理界面展示"何时上架")
+                    if refreshed.status and refreshed.status.value == "PUBLISHED":
+                        refreshed.published_at = now
                     try:
                         await broadcast_svc.broadcast_project(
                             refreshed, trigger=BroadcastTrigger.STATUS_CHANGE,

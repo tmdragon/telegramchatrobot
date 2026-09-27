@@ -44,6 +44,8 @@ class ProjectSummary:
     next_store_check_at: Optional[datetime] = None
     last_store_check_at: Optional[datetime] = None
     last_store_check_result: Optional[str] = None
+    # 上线时间:PUBLISHED 时的 UTC 时间(管理界面展示)
+    published_at: Optional[datetime] = None
 
 
 class ProjectCache:
@@ -137,5 +139,6 @@ class ProjectCache:
                 next_store_check_at=p.next_store_check_at,
                 last_store_check_at=p.last_store_check_at,
                 last_store_check_result=p.last_store_check_result,
+                published_at=p.published_at,
             ))
         return out

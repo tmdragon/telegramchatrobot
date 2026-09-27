@@ -542,3 +542,121 @@ def test_post_project_without_amount_skips_reconciliation():
     r = client.post("/api/projects", json=body)
     assert r.status_code == 200
     sheet_repo.append_reconciliation.assert_not_called()
+
+
+def test_put_field_sets_published_at_on_status_change():
+    """inline edit 把 status 改成 PUBLISHED 时,project.published_at 应当被设置。"""
+    from datetime import datetime, timezone
+    from src.models.project import Field, Project, SheetView
+    from src.models.status import StatusCode
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+
+    p = Project(
+        project_id="TEST-001",
+        project_name="测试",
+        status=StatusCode.MAKING,
+        status_changed_at=datetime(2026, 9, 28, tzinfo=timezone.utc),
+        published_at=None,  # 起始为 None
+        sheets=[
+            SheetView(
+                spreadsheet_id="1REAL_SS_ID",
+                sheet_name="工作表1",
+                fields=[
+                    Field(name="项目编号", value="TEST-001", column_index=1, row_index=2, recognized_as="project_id"),
+                    Field(name="状态", value="我方制作中", column_index=2, row_index=2, recognized_as="status"),
+                ],
+                fetched_at=datetime(2026, 9, 28, tzinfo=timezone.utc),
+            ),
+        ],
+    )
+
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [MagicMock(id="ss1", name="项目主表", role="master")]
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    sheet_repo.update_cell.return_value = "已上架"
+    mapping_repo = MagicMock()
+    broadcast_svc = MagicMock()
+    broadcast_svc.broadcast_project = AsyncMock()
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    cache.replace([p])
+    app.state.cache = cache
+    app.state.broadcast_svc = broadcast_svc
+    client = TestClient(app)
+
+    from urllib.parse import quote
+    field_id = quote("1REAL_SS_ID::工作表1::2::2")
+    r = client.put(
+        f"/api/projects/TEST-001/fields/{field_id}",
+        json={"new_value": "已上架"},
+    )
+    assert r.status_code == 200
+    # p.published_at 应当被设置
+    p_after = cache.get("TEST-001")
+    assert p_after.published_at is not None
+    assert p_after.status == StatusCode.PUBLISHED
+
+
+def test_put_field_does_not_set_published_at_for_non_publish_status():
+    """inline edit 改成非 PUBLISHED 时,published_at 不应被设置。"""
+    from datetime import datetime, timezone
+    from src.models.project import Field, Project, SheetView
+    from src.models.status import StatusCode
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+
+    p = Project(
+        project_id="TEST-002",
+        project_name="测试",
+        status=StatusCode.MAKING,
+        status_changed_at=datetime(2026, 9, 28, tzinfo=timezone.utc),
+        published_at=None,
+        sheets=[
+            SheetView(
+                spreadsheet_id="1REAL_SS_ID",
+                sheet_name="工作表1",
+                fields=[
+                    Field(name="项目编号", value="TEST-002", column_index=1, row_index=2, recognized_as="project_id"),
+                    Field(name="状态", value="我方制作中", column_index=2, row_index=2, recognized_as="status"),
+                ],
+                fetched_at=datetime(2026, 9, 28, tzinfo=timezone.utc),
+            ),
+        ],
+    )
+
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = [MagicMock(id="ss1", name="项目主表", role="master")]
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    sheet_repo.update_cell.return_value = "对方验收中"
+    mapping_repo = MagicMock()
+    broadcast_svc = MagicMock()
+    broadcast_svc.broadcast_project = AsyncMock()
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    cache.replace([p])
+    app.state.cache = cache
+    app.state.broadcast_svc = broadcast_svc
+    client = TestClient(app)
+
+    from urllib.parse import quote
+    field_id = quote("1REAL_SS_ID::工作表1::2::2")
+    r = client.put(
+        f"/api/projects/TEST-002/fields/{field_id}",
+        json={"new_value": "对方验收中"},
+    )
+    assert r.status_code == 200
+    p_after = cache.get("TEST-002")
+    # 不是 PUBLISHED,published_at 应保持 None
+    assert p_after.published_at is None
+    assert p_after.status == StatusCode.CLIENT_REVIEW

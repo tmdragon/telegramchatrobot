@@ -415,6 +415,8 @@ a:hover { text-decoration: underline; }
 .overview-row__name { color: var(--c-text); }
 .overview-row__name--placeholder { color: var(--c-text-subtle); font-style: italic; }
 .overview-row__dwell { color: var(--c-text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.overview-row__published-at { color: var(--c-text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.overview-row__published-at--empty { color: var(--c-text-subtle); }
 .overview-row__view {
   font-size: 12px;
   color: var(--c-primary);
