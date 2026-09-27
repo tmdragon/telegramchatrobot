@@ -17,10 +17,15 @@ import {
   getEditProjects,
   wireAddProjectControl,
 } from "./edit-projects.js";
+import { filterSelectOptions, wireSearchInput } from "./select-filter.js";
 
-function _openModal(modal) {
-  modal.hidden = false;
-  modal.setAttribute("aria-hidden", "false");
+function _openNewGroupModal(modal, form) {
+  _clearError(form);
+  form.reset();
+  const select = form.querySelector("#ng-project-id");
+  if (select) filterSelectOptions(select, "");
+  _openModal(modal);
+  form.querySelector("#ng-chat-id").focus();
 }
 
 function _closeModal(modal) {
@@ -129,12 +134,8 @@ export function init() {
   const editForm = document.getElementById("edit-group-form");
   if (!newBtn || !newModal || !newForm) return;
 
-  newBtn.addEventListener("click", () => {
-    _clearError(newForm);
-    newForm.reset();
-    _openModal(newModal);
-    newForm.querySelector("#ng-chat-id").focus();
-  });
+  newBtn.addEventListener("click", () => _openNewGroupModal(newModal, newForm));
+  wireSearchInput("ng-project-search", "ng-project-id");
 
   document.querySelectorAll("[data-modal-close]").forEach((el) => {
     el.addEventListener("click", () => {

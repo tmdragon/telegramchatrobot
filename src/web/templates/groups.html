@@ -84,10 +84,16 @@
         </div>
         <div class="form-row">
           <label class="form-row__label" for="ng-project-id">关联项目 <span class="form-hint">(可选)</span></label>
-          <select id="ng-project-id" name="project_id">
+          <input type="search" id="ng-project-search"
+                 placeholder="🔍 搜索项目编号/名称/包名..."
+                 autocomplete="off"
+                 class="eg-projects-search-input">
+          <select id="ng-project-id" name="project_id" size="6" class="eg-projects-select">
             <option value="">-- 不关联,创建纯群映射 --</option>
             {% for p in projects %}
-              <option value="{{ p.project_id }}">{{ p.project_id }}{% if p.project_name %} ({{ p.project_name }}){% endif %}</option>
+              <option value="{{ p.project_id }}"
+                      data-project-name="{{ p.project_name }}"
+                      data-package-name="{{ p.package_name }}">{{ p.project_id }}{% if p.project_name %} ({{ p.project_name }}){% endif %}{% if p.package_name %} · {{ p.package_name }}{% endif %}</option>
             {% endfor %}
           </select>
         </div>

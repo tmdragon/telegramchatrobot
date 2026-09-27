@@ -237,6 +237,7 @@ async def groups_page(request: Request):
             projects.append({
                 "project_id": p.project_id,
                 "project_name": p.project_name or "",
+                "package_name": p.package_name or "",
             })
         projects.sort(key=lambda x: x["project_id"])
 
