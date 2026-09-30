@@ -208,6 +208,43 @@ class BroadcastSvc:
             f"▸ 停留时长：`{humanize_duration(dwell_seconds)}`（超时未变）"
         )
 
+    async def broadcast_custom_to_all_groups(
+        self,
+        content: str,
+        chat_ids: Optional[list[str]] = None,
+    ) -> dict:
+        """向启用的客户群发送自定义内容(不走 render_broadcast)。
+
+        用于节日祝福、运营公告等场景:同一条文案发给所有(或指定的)chat_id,
+        每个 chat_id 一条,失败的计入 failed 但不阻断其他发送。
+
+        Args:
+            content: 要发送的文本
+            chat_ids: 可选白名单;提供时只发给这些 chat_id 的 enabled mappings
+
+        Returns:
+            {sent, failed, total}
+        """
+        self._last_send_error = None
+        try:
+            mappings: list[Mapping] = await asyncio.to_thread(self.mapping_repo.load_all)
+        except Exception:  # noqa: BLE001
+            mappings = []
+        enabled = [m for m in mappings if m.enabled and m.chat_id]
+        if chat_ids:
+            target_set = set(chat_ids)
+            enabled = [m for m in enabled if m.chat_id in target_set]
+
+        sent = 0
+        failed = 0
+        for m in enabled:
+            try:
+                await self.bot_service.send_message(m.chat_id, content)
+                sent += 1
+            except Exception:  # noqa: BLE001
+                failed += 1
+        return {"sent": sent, "failed": failed, "total": len(enabled)}
+
     async def broadcast_all(
         self,
         skip_if_no_change: bool = True,

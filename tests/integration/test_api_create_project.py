@@ -720,3 +720,63 @@ def test_post_broadcast_all_503_when_broadcast_svc_not_configured():
     r = client.post("/api/broadcast/all", json={})
     assert r.status_code == 503
     assert "bot" in r.json()["detail"].lower() or "broadcast" in r.json()["detail"].lower()
+
+
+def test_post_broadcast_custom_calls_broadcast_custom_to_all_groups():
+    """POST /api/broadcast/custom 应该调 broadcast_custom_to_all_groups(content, chat_ids=None)。"""
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    broadcast_svc = MagicMock()
+    broadcast_svc.broadcast_custom_to_all_groups = AsyncMock(return_value={
+        "sent": 3, "failed": 0, "total": 3,
+    })
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    app.state.broadcast_svc = broadcast_svc
+    client = TestClient(app)
+
+    r = client.post("/api/broadcast/custom", json={"content": "🎉 新年快乐!"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["sent"] == 3
+    broadcast_svc.broadcast_custom_to_all_groups.assert_awaited_once_with(
+        "🎉 新年快乐!", chat_ids=None,
+    )
+
+
+def test_post_broadcast_custom_rejects_empty_content():
+    """content 为空字符串(只 strip 后)应该 400。"""
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    broadcast_svc = MagicMock()
+    broadcast_svc.broadcast_custom_to_all_groups = AsyncMock()
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    app.state.broadcast_svc = broadcast_svc
+    client = TestClient(app)
+
+    r = client.post("/api/broadcast/custom", json={"content": "   "})
+    assert r.status_code == 400
+    assert "content" in r.json()["detail"].lower() or "为空" in r.json()["detail"]

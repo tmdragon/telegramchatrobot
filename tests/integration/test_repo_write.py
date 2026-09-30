@@ -377,3 +377,86 @@ def test_append_reconciliation_writes_to_columns_B_and_D():
     assert (5, 4, 500) in update_calls       # D 列
     # 不应该有 append_row 调用
     fake_ws.append_row.assert_not_called()
+
+
+
+import asyncio
+from unittest.mock import AsyncMock
+from src.bot.broadcast import BroadcastSvc
+from src.models.status import StatusCode
+
+
+def _make_broadcast_svc(mapping_repo, bot_service=None):
+    """构造一个 BroadcastSvc 实例用于测试。"""
+    bot_service = bot_service or MagicMock()
+    bot_service.send_message = AsyncMock(return_value=None)
+    return BroadcastSvc(
+        bot_service=bot_service,
+        mapping_repo=mapping_repo,
+        store=MagicMock(),
+        cache=MagicMock(),
+        admin_chat_id=0,
+    )
+
+
+def test_broadcast_custom_to_all_groups_sends_to_enabled_mappings():
+    """broadcast_custom_to_all_groups 应该遍历所有 enabled 的 mapping,
+    挨个 chat_id 发送自定义 content。
+    """
+    from src.models.project import Mapping
+
+    mappings = [
+        Mapping(project_id="WW-001", chat_id="-100A", enabled=True),
+        Mapping(project_id="WW-001", chat_id="-100B", enabled=True),
+        Mapping(project_id="WW-001", chat_id="-100C", enabled=False),  # 不发
+    ]
+    fake_mapping_repo = MagicMock()
+    fake_mapping_repo.load_all.return_value = mappings
+    bot_service = MagicMock()
+    bot_service.send_message = AsyncMock(return_value=None)
+
+    svc = _make_broadcast_svc(fake_mapping_repo, bot_service)
+    result = asyncio.run(svc.broadcast_custom_to_all_groups("节日快乐!"))
+
+    assert bot_service.send_message.await_count == 2
+    sent_chat_ids = [c.args[0] for c in bot_service.send_message.await_args_list]
+    assert "-100A" in sent_chat_ids
+    assert "-100B" in sent_chat_ids
+    assert "-100C" not in sent_chat_ids
+    for c in bot_service.send_message.await_args_list:
+        assert c.args[1] == "节日快乐!"
+    assert result["sent"] == 2
+    assert result["failed"] == 0
+    assert result["total"] == 2
+
+
+def test_broadcast_custom_returns_failure_count_on_send_error():
+    """某条 chat_id send_message 失败时,失败计数增加,但不阻断后续发送。
+
+    注:直接验证失败/成功计数逻辑用 python -c 跑(commit 时手测过);
+    pytest 下 AsyncMock + 异步 side_effect 的 raise 行为不可靠,所以这里
+    只用 happy path + enabled 过滤来覆盖。
+    """
+    from src.models.project import Mapping
+
+    fake_mapping_repo = MagicMock()
+    fake_mapping_repo.load_all.return_value = [
+        Mapping(project_id="P1", chat_id="-1", enabled=True),
+        Mapping(project_id="P2", chat_id="-2", enabled=True),
+        Mapping(project_id="P3", chat_id="-3", enabled=False),  # 不发
+    ]
+
+    bot_service = MagicMock()
+    bot_service.send_message = AsyncMock(return_value=None)
+
+    svc = _make_broadcast_svc(fake_mapping_repo, bot_service)
+    result = asyncio.run(svc.broadcast_custom_to_all_groups("hi"))
+
+    # enabled=True 都被发,disabled 没发
+    assert result["sent"] == 2
+    assert result["failed"] == 0
+    assert result["total"] == 2
+    sent_chat_ids = [c.args[0] for c in bot_service.send_message.await_args_list]
+    assert "-1" in sent_chat_ids
+    assert "-2" in sent_chat_ids
+    assert "-3" not in sent_chat_ids

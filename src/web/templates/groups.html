@@ -15,6 +15,40 @@
             title="新增群（每条 chat_id 唯一）">+ 新建群</button>
   </header>
 
+  {# 广播 modal #}
+  <div id="broadcast-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal__panel modal__panel--wide" role="dialog" aria-labelledby="broadcast-title">
+      <h2 id="broadcast-title" class="modal__title">📢 广播到所有客户群</h2>
+      <form id="broadcast-form" autocomplete="off">
+        <div class="form-row">
+          <label class="form-row__label">📅 节日快捷</label>
+          <div class="broadcast-presets" id="broadcast-presets">
+            <button type="button" class="chip chip--preset" data-preset="spring">🎊 春节</button>
+            <button type="button" class="chip chip--preset" data-preset="midautumn">🌕 中秋</button>
+            <button type="button" class="chip chip--preset" data-preset="lantern">🏮 元宵</button>
+            <button type="button" class="chip chip--preset" data-preset="dragon">🐉 端午</button>
+            <button type="button" class="chip chip--preset" data-preset="national">🇨🇳 国庆</button>
+            <button type="button" class="chip chip--preset" data-preset="newyear">🎆 元旦</button>
+            <button type="button" class="chip chip--preset" data-preset="xmas">🎄 圣诞</button>
+            <button type="button" class="chip chip--preset" data-preset="custom">🗓️ 自定义</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="broadcast-content">广播内容</label>
+          <textarea id="broadcast-content" name="content"
+                    placeholder="点上方节日按钮填充祝福语,或直接输入自定义内容..."
+                    rows="6"></textarea>
+        </div>
+        <div class="modal__actions">
+          <button type="button" data-modal-close class="btn btn--ghost">取消</button>
+          <button type="submit" id="broadcast-submit" class="btn btn--primary">📨 发送到所有群</button>
+        </div>
+      </form>
+      <div id="broadcast-error" class="form-error" hidden></div>
+    </div>
+  </div>
+
   {% include "partials/_error_banner.html" %}
 
   {% if groups %}

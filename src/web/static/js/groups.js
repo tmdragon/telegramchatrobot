@@ -18,7 +18,7 @@ import {
   wireAddProjectControl,
 } from "./edit-projects.js";
 import { filterSelectOptions, wireSearchInput } from "./select-filter.js";
-import { broadcastAll } from "./broadcast-all.js";
+import { initBroadcastModal } from "./broadcast-all.js";
 
 function _openNewGroupModal(modal, form) {
   _clearError(form);
@@ -159,11 +159,8 @@ export function init() {
   // 编辑群:添加项目按钮
   wireAddProjectControl();
 
-  // 一键广播所有群
-  const broadcastBtn = document.getElementById("btn-broadcast-all");
-  if (broadcastBtn) {
-    broadcastBtn.addEventListener("click", () => broadcastAll());
-  }
+  // 一键广播 modal(modal 打开 + 节日预设 + 发送)
+  initBroadcastModal();
 
   // 行内按钮(委托)
   const tbody = document.querySelector("[data-groups-tbody]");

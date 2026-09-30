@@ -650,6 +650,59 @@ a:hover { text-decoration: underline; }
   background: var(--c-surface);
   font: inherit;
 }
+
+/* === 广播 modal === */
+.broadcast-presets {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.chip--preset {
+  padding: 4px 10px;
+  font-family: inherit; font-size: 12px;
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+.chip--preset:hover {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+#broadcast-content {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: inherit; font-size: 13px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  resize: vertical;
+}
+#broadcast-content:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+}
+/* 编辑群 modal 的项目搜索 + listbox */
+.eg-projects-search-input {
+  width: 100%; padding: 6px 10px; margin-bottom: 6px;
+  font: inherit; font-size: 13px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+}
+.eg-projects-search-input:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+}
+.eg-projects-select {
+  width: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  font: inherit;
+}
 .chip {
   display: inline-flex;
   padding: 2px 8px;

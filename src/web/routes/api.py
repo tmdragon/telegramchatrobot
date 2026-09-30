@@ -159,6 +159,38 @@ async def post_broadcast_all(request: Request):
     return result
 
 
+class BroadcastCustomBody(BaseModel):
+    content: str
+    chat_ids: Optional[list[str]] = None  # 可选:限制发送目标
+
+
+@router.post("/broadcast/custom")
+async def post_broadcast_custom(request: Request, body: BroadcastCustomBody):
+    """发送自定义内容到所有启用的客户群(节日祝福/运营公告)。
+
+    body:
+      content: 要发送的文本(必填,自动 strip)
+      chat_ids: 可选,只发给这些 chat_ids(默认所有 enabled mappings)
+
+    503 当 broadcast_svc 未配置;502 当发送过程出错。
+    """
+    app = request.app
+    broadcast_svc = getattr(app.state, "broadcast_svc", None)
+    if broadcast_svc is None:
+        raise HTTPException(status_code=503, detail="broadcast service not configured")
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content 不能为空")
+    try:
+        result = await broadcast_svc.broadcast_custom_to_all_groups(
+            content, chat_ids=body.chat_ids,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("broadcast_custom failed")
+        raise HTTPException(status_code=502, detail=f"broadcast failed: {e}")
+    return result
+
+
 @router.get("/statuses")
 async def get_statuses():
     """返回所有合法状态选项(用于项目详情页"状态"列的内联编辑下拉框)。
