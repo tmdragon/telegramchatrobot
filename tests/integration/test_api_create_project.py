@@ -660,3 +660,63 @@ def test_put_field_does_not_set_published_at_for_non_publish_status():
     # 不是 PUBLISHED,published_at 应保持 None
     assert p_after.published_at is None
     assert p_after.status == StatusCode.CLIENT_REVIEW
+
+
+def test_post_broadcast_all_calls_broadcast_all():
+    """POST /api/broadcast/all 应该调用 broadcast_svc.broadcast_all。
+    skip_if_no_change=False(强制重发)以确保用户手动触发就一定发出去。
+    """
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    broadcast_svc = MagicMock()
+    broadcast_svc.broadcast_all = AsyncMock(return_value={
+        "sent": 5, "skipped": 0, "failed": 0, "dryrun": False,
+    })
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    app.state.broadcast_svc = broadcast_svc
+    client = TestClient(app)
+
+    r = client.post("/api/broadcast/all", json={})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["sent"] == 5
+    assert body["failed"] == 0
+    broadcast_svc.broadcast_all.assert_awaited_once_with(
+        skip_if_no_change=False, dryrun=False,
+    )
+
+
+def test_post_broadcast_all_503_when_broadcast_svc_not_configured():
+    """broadcast_svc 没配时返回 503(和 test-send 一致)。"""
+    from fastapi.testclient import TestClient
+    from src.web.app import create_app
+    from src.web.cache import ProjectCache
+
+    cfg_mock = MagicMock()
+    cfg_mock.ui_bind = "127.0.0.1"
+    cfg_mock.ui_port = 8765
+    cfg_mock.spreadsheets = []
+    store = MagicMock()
+    sheet_repo = MagicMock()
+    mapping_repo = MagicMock()
+    app = create_app(cfg_mock, store, sheet_repo, mapping_repo, bot_service=None)
+    cache = ProjectCache()
+    app.state.cache = cache
+    # 不设 broadcast_svc
+    client = TestClient(app)
+
+    r = client.post("/api/broadcast/all", json={})
+    assert r.status_code == 503
+    assert "bot" in r.json()["detail"].lower() or "broadcast" in r.json()["detail"].lower()

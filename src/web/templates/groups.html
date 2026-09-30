@@ -7,6 +7,9 @@
   <header class="groups-header">
     <h1>📡 群映射管理</h1>
     <span class="groups-header__count" data-groups-count>{{ groups | length }}</span>
+    <button type="button" id="btn-broadcast-all"
+            class="groups-header__broadcast"
+            title="一键向所有启用的客户群发送广播">📢 一键广播所有群</button>
     <button type="button" id="btn-new-group"
             class="groups-header__add"
             title="新增群（每条 chat_id 唯一）">+ 新建群</button>

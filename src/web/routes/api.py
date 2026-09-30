@@ -137,6 +137,28 @@ async def get_new_form_fields(request: Request):
     return {"info_fields": fields}
 
 
+@router.post("/broadcast/all")
+async def post_broadcast_all(request: Request):
+    """一键广播所有客户群(每个项目的当前状态 → 该项目的群)。
+
+    - skip_if_no_change=False:强制重发,不论状态是否变化
+    - 走 broadcast_svc.broadcast_all 完整逻辑(渲染/发送/重试/store 记录)
+    - 503 当 broadcast_svc 未配置;502 当 gspread / telegram 出错
+    """
+    app = request.app
+    broadcast_svc = getattr(app.state, "broadcast_svc", None)
+    if broadcast_svc is None:
+        raise HTTPException(status_code=503, detail="broadcast service not configured")
+    try:
+        result = await broadcast_svc.broadcast_all(
+            skip_if_no_change=False, dryrun=False,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("broadcast_all failed")
+        raise HTTPException(status_code=502, detail=f"broadcast failed: {e}")
+    return result
+
+
 @router.get("/statuses")
 async def get_statuses():
     """返回所有合法状态选项(用于项目详情页"状态"列的内联编辑下拉框)。
