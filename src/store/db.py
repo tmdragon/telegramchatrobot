@@ -215,6 +215,28 @@ class Store:
             )
             conn.commit()
 
+    def get_latest_status_at(
+        self, project_id: str, status_code: str
+    ) -> Optional[datetime]:
+        """返回该项目最近一次记录为该 status_code 的时间(从 status_history 表查)。
+
+        用于在 published_at 字段未持久化时回填 — 比如老项目 published_at 一直是 None,
+        但 status_history 表里其实有"何时变成 PUBLISHED"的记录。
+        """
+        from datetime import datetime
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT MAX(detected_at) FROM status_history
+                   WHERE project_id = ? AND status_code = ?""",
+                (project_id, status_code),
+            ).fetchone()
+        if not row or not row[0]:
+            return None
+        try:
+            return datetime.fromisoformat(row[0])
+        except (ValueError, TypeError):
+            return None
+
     def get_project_state(
         self, project_id: str
     ) -> Optional[tuple[str, datetime, Optional[str], Optional[datetime]]]:

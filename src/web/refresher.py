@@ -39,6 +39,31 @@ class BackgroundRefresher:
         # 商店监测：每个项目的 next_check_at（用于 UI 显示 / 决定是否到时间再查）
         self.store_check_schedule: dict[str, datetime] = {}
         self.online_check_schedule: dict[str, datetime] = {}
+
+    async def backfill_published_at(self) -> int:
+        """从 status_history 表回填 Project.published_at(老项目字段未持久化时用)。
+
+        遍历 cache 中所有 PUBLISHED 项目,如果 published_at 为 None,查 store 的
+        status_history 表拿最近一次变成 PUBLISHED 的时间,设到 p.published_at。
+
+        Returns:回填成功的项目数。
+        """
+        if self.cache is None or self.store is None:
+            return 0
+        from src.models.status import StatusCode
+        n = 0
+        for p in self.cache.list_projects():
+            if p.status is None or p.status.value != "PUBLISHED":
+                continue
+            if p.published_at is not None:
+                continue
+            ts = await asyncio.to_thread(
+                self.store.get_latest_status_at, p.project_id, "PUBLISHED"
+            )
+            if ts is not None:
+                p.published_at = ts
+                n += 1
+        return n
         # Phase 3 商店监测缓存：上次检查结果（process 内）
         self.last_check_result: dict[str, dict] = {}
 
@@ -114,6 +139,8 @@ class BackgroundRefresher:
             self._previous = new_index
             self._initialized = True
             self.cache.replace(projects)
+            # 回填 published_at(老项目 published_at 是 None,从 status_history 表查)
+            await self.backfill_published_at()
             # 持久化
             now = datetime.now(timezone.utc)
             for ss in targets:
