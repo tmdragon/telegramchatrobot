@@ -38,6 +38,7 @@ class BackgroundRefresher:
         self._initialized = False
         # 商店监测：每个项目的 next_check_at（用于 UI 显示 / 决定是否到时间再查）
         self.store_check_schedule: dict[str, datetime] = {}
+        self.online_check_schedule: dict[str, datetime] = {}
         # Phase 3 商店监测缓存：上次检查结果（process 内）
         self.last_check_result: dict[str, dict] = {}
 

@@ -460,3 +460,44 @@ def test_broadcast_custom_returns_failure_count_on_send_error():
     assert "-1" in sent_chat_ids
     assert "-2" in sent_chat_ids
     assert "-3" not in sent_chat_ids
+
+
+def test_fetch_proxy_url_parses_proxy_field():
+    """fetch_proxy_url 应该 GET API endpoint 并解析 {proxy: '...'}。"""
+    from src.store_checker import fetch_proxy_url
+    import httpx
+
+    fake_response = MagicMock()
+    fake_response.json.return_value = {"proxy": "http://user:pass@ip:port"}
+    fake_response.raise_for_status = MagicMock()
+
+    fake_client = MagicMock()
+    fake_client.get = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=None)
+
+    # patch httpx.AsyncClient to return our mock
+    import unittest.mock
+    with unittest.mock.patch("src.store_checker.httpx.AsyncClient", return_value=fake_client):
+        result = asyncio.run(fetch_proxy_url("https://proxy.com/api/get", country="US"))
+
+    assert result == "http://user:pass@ip:port"
+    # country 参数应该被附加到 URL
+    called_url = fake_client.get.call_args[0][0]
+    assert "country=US" in called_url
+
+
+def test_fetch_proxy_url_returns_none_on_error():
+    """fetch_proxy_url 失败时返回 None(回退到直连)。"""
+    from src.store_checker import fetch_proxy_url
+    import unittest.mock
+
+    fake_client = MagicMock()
+    fake_client.get = AsyncMock(side_effect=Exception("network error"))
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=None)
+
+    with unittest.mock.patch("src.store_checker.httpx.AsyncClient", return_value=fake_client):
+        result = asyncio.run(fetch_proxy_url("https://proxy.com/api/get"))
+
+    assert result is None

@@ -54,6 +54,13 @@ class Project:
     last_store_check_result: Optional[str] = None  # 'published' | 'not_found' | 'pending' | 'error'
     # 上线时间:状态变为 PUBLISHED 时的 UTC 时间;便于管理界面展示"何时上架"
     published_at: Optional[datetime] = None
+    # === 在架监控(PUBLISHED 之后周期性探测是否被下架)===
+    check_mode: str = "direct"  # 'direct' (直连) | 'proxy' (代理池)
+    proxy_country: Optional[str] = None  # 代理国家/地区代码(US/JP/IN...);仅 proxy 模式用
+    last_online_check_at: Optional[datetime] = None
+    last_online_check_result: Optional[str] = None  # 'online' | 'offline_pending' | 'offline_confirmed' | 'unknown'
+    offline_pending_since: Optional[datetime] = None  # 首次检测到疑似下架的时间
+    offline_pending_attempts: int = 0  # 连续失败次数,达上限才认定下架
 
 
 @dataclass

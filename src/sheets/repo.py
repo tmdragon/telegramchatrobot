@@ -19,6 +19,7 @@ from src.sheets.parser import (
     ADJUST_KEY_CANDIDATES,
     A_PACKAGE_CANDIDATES,
     B_ENTRY_NAME_CANDIDATES,
+    CHECK_MODE_CANDIDATES,
     CLASS_NAME_CANDIDATES,
     HeaderDetector,
     HASH_CANDIDATES,
@@ -29,6 +30,7 @@ from src.sheets.parser import (
     PRIVACY_POLICY_CANDIDATES,
     PROJECT_ID_CANDIDATES,
     PROJECT_NAME_CANDIDATES,
+    PROXY_COUNTRY_CANDIDATES,
     SHA1_CANDIDATES,
     SHA256_CANDIDATES,
     STATUS_CANDIDATES,
@@ -68,6 +70,8 @@ class SheetRepo:
             sha1_col = detector.find_column(SHA1_CANDIDATES)
             sha256_col = detector.find_column(SHA256_CANDIDATES)
             hash_col = detector.find_column(HASH_CANDIDATES)
+            check_mode_col = detector.find_column(CHECK_MODE_CANDIDATES)
+            proxy_country_col = detector.find_column(PROXY_COUNTRY_CANDIDATES)
 
             if pid_col is None:
                 continue  # 此表无项目编号列，跳过
@@ -108,6 +112,10 @@ class SheetRepo:
                         recognized = "sha256"
                     elif hash_col is not None and col_idx == hash_col:
                         recognized = "hash_value"
+                    elif check_mode_col is not None and col_idx == check_mode_col:
+                        recognized = "check_mode"
+                    elif proxy_country_col is not None and col_idx == proxy_country_col:
+                        recognized = "proxy_country"
                     fields.append(Field(
                         name=header,
                         value=value,
@@ -140,6 +148,11 @@ class SheetRepo:
                 # 上架地区
                 launch_region = row[region_col - 1].strip() if region_col and region_col <= len(row) else None
                 launch_region = launch_region or None
+                # 在架监控配置(可空,空时用默认 direct)
+                check_mode_raw = row[check_mode_col - 1].strip() if check_mode_col and check_mode_col <= len(row) else ""
+                check_mode = "proxy" if check_mode_raw in ("代理", "proxy", "Proxy", "PROXY") else "direct"
+                proxy_country_raw = row[proxy_country_col - 1].strip() if proxy_country_col and proxy_country_col <= len(row) else ""
+                proxy_country = proxy_country_raw or None
 
                 if pid not in projects_by_id:
                     projects_by_id[pid] = Project(
@@ -154,6 +167,8 @@ class SheetRepo:
                         payment_status=payment,
                         payment_raw=pay_raw,
                         payment_changed_at=fetched_at if payment else None,
+                        check_mode=check_mode,
+                        proxy_country=proxy_country,
                         sheets=[sheet_view],
                     )
                 else:
@@ -168,6 +183,11 @@ class SheetRepo:
                         from src.country import normalize_country
                         p.launch_region = launch_region
                         p.launch_region_code = normalize_country(launch_region)
+                    # 在架监控配置(首次见到或值更新时写入)
+                    if check_mode_raw and p.check_mode == "direct" and check_mode == "proxy":
+                        p.check_mode = check_mode
+                    if proxy_country and not p.proxy_country:
+                        p.proxy_country = proxy_country
                     # 支付状态首次见到时写入；后续 sheet 可更新
                     if payment is not None:
                         if p.payment_status != payment:
@@ -289,6 +309,9 @@ class SheetRepo:
             "sha1": SHA1_CANDIDATES,
             "sha256": SHA256_CANDIDATES,
             "hash_value": HASH_CANDIDATES,
+            # === 在架监控 ===
+            "check_mode": CHECK_MODE_CANDIDATES,
+            "proxy_country": PROXY_COUNTRY_CANDIDATES,
         }
 
         row_data = [""] * len(headers)

@@ -43,6 +43,10 @@ B_ENTRY_NAME_CANDIDATES = ["B 入口名称", "B入口", "B entry name", "B_entry
 # A包:包版本名(package variant label)
 A_PACKAGE_CANDIDATES = ["A包", "A 包", "A Package", "A_package", "APackage", "package_a"]
 
+# 在架监控配置(每个项目可单独设置检测方式 + 代理国家)
+CHECK_MODE_CANDIDATES = ["检测方式", "校验方式", "check_mode", "Check Mode", "checkMode"]
+PROXY_COUNTRY_CANDIDATES = ["代理国家", "代理地区", "proxy_country", "Proxy Country", "proxyCountry", "Country Code"]
+
 
 class HeaderDetector:
     """根据表头行（list[str]）匹配已知字段的列号。"""

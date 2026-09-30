@@ -21,7 +21,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from src.bot.broadcast import BroadcastSvc
 from src.bot.templates import BroadcastTrigger
 from src.scheduler.config import BroadcastConfig
-from src.store_checker import check_app_published
+from src.store_checker import check_app_published, fetch_proxy_url
 from src.web.cache import ProjectCache
 from src.web.refresher import BackgroundRefresher
 
@@ -91,7 +91,31 @@ def build_scheduler(
             coalesce=True,
         )
 
+    # === 在架监控：每 N 小时扫一次已发布项目 ===
+    if (
+        broadcast_cfg.online_check_interval_hours > 0
+        and refresher is not None
+    ):
+        scheduler.add_job(
+            _online_check_wrapper,
+            trigger=IntervalTrigger(hours=broadcast_cfg.online_check_interval_hours),
+            args=(refresher, broadcast_svc, broadcast_cfg),
+            id="online-check",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
     return scheduler
+
+
+async def _online_check_wrapper(
+    refresher: "BackgroundRefresher",
+    broadcast_svc: "BroadcastSvc",
+    broadcast_cfg: "BroadcastConfig",
+) -> None:
+    """定时入口:遍历已发布项目检查在架状态。"""
+    await check_online_status(broadcast_svc, broadcast_cfg, refresher)
 
 
 async def _refresh_and_broadcast_wrapper(
@@ -327,3 +351,143 @@ async def _store_monitor_wrapper(
             next_at = now + timedelta(seconds=wait_seconds)
             project.next_store_check_at = next_at
             refresher.store_check_schedule[project.project_id] = next_at
+
+
+async def _online_check_one(
+    project,
+    broadcast_svc: "BroadcastSvc",
+    broadcast_cfg: "BroadcastConfig",
+    refresher: "BackgroundRefresher",
+) -> dict:
+    """单个项目的在架监控检查。返回 {ok, result, reason}。
+
+    流程:
+    1. 根据 project.check_mode 决定代理来源
+       - 'proxy':从 online_check_proxy_api_url 拉代理(可选 country)
+       - 'direct':不走代理
+    2. 调 check_app_published(store_url, proxy=...)
+    3. published=True → 标记 online,清掉 pending 状态
+    4. published=False:
+       - 若还没在 pending,设 pending_since=now,attempts=1
+       - 否则 attempts += 1
+       - 若 attempts >= max_attempts → 标记 offline_confirmed + 改状态为 OFF_SHELF + 广播
+    """
+    from src.models.status import StatusCode
+
+    url = project.store_url
+    if not url:
+        return {"ok": False, "result": "no_url", "reason": "store_url is empty"}
+
+    # 决定代理
+    proxy = None
+    if project.check_mode == "proxy" and broadcast_cfg.online_check_proxy_api_url:
+        country = project.proxy_country or broadcast_cfg.online_check_default_country or None
+        proxy = await fetch_proxy_url(
+            broadcast_cfg.online_check_proxy_api_url, country=country
+        )
+
+    result = await check_app_published(url, proxy=proxy)
+    now = datetime.now(timezone.utc)
+    project.last_online_check_at = now
+
+    if result.get("published"):
+        # 在线:清掉 pending 状态,正常 PUBLISHED
+        project.last_online_check_result = "online"
+        project.offline_pending_since = None
+        project.offline_pending_attempts = 0
+        return {"ok": True, "result": "online", "reason": result.get("reason")}
+
+    # published=False → 进入/累加 pending
+    if project.offline_pending_since is None:
+        project.offline_pending_since = now
+        project.offline_pending_attempts = 1
+    else:
+        project.offline_pending_attempts += 1
+
+    project.last_online_check_result = "offline_pending"
+
+    max_attempts = broadcast_cfg.online_check_max_attempts
+    if project.offline_pending_attempts >= max_attempts:
+        # 确认下架 → 改状态 + 广播
+        project.last_online_check_result = "offline_confirmed"
+        project.offline_pending_since = None
+        project.offline_pending_attempts = 0
+        # 改状态为 OFF_SHELF
+        project.status = StatusCode.OFF_SHELF
+        project.status_changed_at = now
+        # 触发广播(走完整流程:同步 sheet + refresh + 发客户群)
+        try:
+            row = refresher._find_project_row(project.project_id)
+            if row is not None:
+                await asyncio.to_thread(
+                    refresher.sheet_repo.update_cell_by_header,
+                    spreadsheet_id=refresher.cfg.spreadsheets[0].id,
+                    worksheet_name=refresher.cfg.spreadsheets[0].name,
+                    row=row,
+                    header_name="状态",
+                    new_value="已下架",
+                )
+                await refresher.refresh_now()
+                refreshed = refresher.cache.get(project.project_id)
+                if refreshed is not None:
+                    try:
+                        await broadcast_svc.broadcast_project(
+                            refreshed, trigger=BroadcastTrigger.STATUS_CHANGE,
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+            await broadcast_svc.broadcast_internal_only_with_text(
+                f"⚠ 在架监控确认下架: {project.project_id} "
+                f"({project.project_name or '（未命名）'}) 经过 {max_attempts} 次确认,状态变更为已下架。"
+            )
+        except Exception as e:  # noqa: BLE001
+            await broadcast_svc.broadcast_internal_only_with_text(
+                f"⚠ 在架监控变更状态失败 {project.project_id}: {e}"
+            )
+        return {"ok": True, "result": "offline_confirmed", "reason": result.get("reason")}
+
+    # 还没达到 max_attempts,下次重试
+    retry_at = now + timedelta(minutes=broadcast_cfg.online_check_retry_interval_minutes)
+    refresher.online_check_schedule[project.project_id] = retry_at
+    return {"ok": True, "result": "offline_pending",
+            "reason": result.get("reason"),
+            "attempts": project.offline_pending_attempts}
+
+
+async def check_online_status(
+    broadcast_svc: "BroadcastSvc",
+    broadcast_cfg: "BroadcastConfig",
+    refresher: "BackgroundRefresher",
+) -> dict:
+    """遍历所有 PUBLISHED 项目,逐一检查在架状态。
+
+    Returns:
+        {checked, online, offline_pending, offline_confirmed, errors}
+    """
+    cache = refresher.cache
+    if cache is None:
+        return {"checked": 0}
+    checked = 0
+    online = 0
+    pending = 0
+    confirmed = 0
+    errors = 0
+    for proj in cache.list_projects():
+        if proj.status is None or proj.status.value != "PUBLISHED":
+            continue
+        checked += 1
+        try:
+            r = await _online_check_one(proj, broadcast_svc, broadcast_cfg, refresher)
+            result = r.get("result")
+            if result == "online":
+                online += 1
+            elif result == "offline_pending":
+                pending += 1
+            elif result == "offline_confirmed":
+                confirmed += 1
+            else:
+                errors += 1
+        except Exception:  # noqa: BLE001
+            errors += 1
+    return {"checked": checked, "online": online, "offline_pending": pending,
+            "offline_confirmed": confirmed, "errors": errors}

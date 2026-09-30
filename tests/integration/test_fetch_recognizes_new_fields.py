@@ -108,3 +108,45 @@ def test_append_row_writes_ww_extra_fields():
     assert written_row[2] == "tk_abc123"                       # ADJUST KEY
     assert written_row[3] == "B-Entry-Default"                  # B 入口名称
     assert written_row[4] == "A"                                 # A包
+
+def test_fetch_all_tags_check_mode_field():
+    """fetch_all 应该把"检测方式"列标记为 recognized_as='check_mode',值映射到 Project.check_mode。"""
+    fake_ws = MagicMock()
+    fake_ws.title = "项目主表"
+    fake_ws.get_all_values.return_value = [
+        ["项目编号", "状态", "检测方式", "代理国家"],
+        ["WW-001", "已上架", "代理", "JP"],
+    ]
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+
+    from src.sheets.repo import SheetRepo
+    from src.config import SpreadsheetConfig
+    repo = SheetRepo(fake_client)
+    projects = repo.fetch_all([
+        SpreadsheetConfig(id="ss1", name="项目主表", role="master"),
+    ])
+    p = projects[0]
+    assert p.check_mode == "proxy"
+    assert p.proxy_country == "JP"
+    # 字段也标记为 recognized
+    cm_field = next(f for f in p.sheets[0].fields if f.recognized_as == "check_mode")
+    assert cm_field.value == "代理"
+
+
+def test_fetch_all_defaults_check_mode_to_direct():
+    """'检测方式'列缺失或空时,project.check_mode 默认 'direct'。"""
+    fake_ws = MagicMock()
+    fake_ws.title = "项目主表"
+    fake_ws.get_all_values.return_value = [
+        ["项目编号", "状态"],
+        ["WW-001", "已上架"],
+    ]
+    fake_client = MagicMock()
+    fake_client.open_by_key.return_value.worksheet.return_value = fake_ws
+    from src.sheets.repo import SheetRepo
+    from src.config import SpreadsheetConfig
+    repo = SheetRepo(fake_client)
+    p = repo.fetch_all([SpreadsheetConfig(id="ss1", name="项目主表", role="master")])[0]
+    assert p.check_mode == "direct"
+    assert p.proxy_country is None

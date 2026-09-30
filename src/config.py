@@ -52,6 +52,52 @@ def _env(name: str) -> str | None:
     return val if val else None
 
 
+def write_scheduler_config(path: Path, cfg: BroadcastConfig) -> None:
+    """把 BroadcastConfig 原子写到 scheduler.yaml(带 .bak 备份)。
+
+    流程:
+    1. 备份原文件(.bak)
+    2. 序列化 cfg → dict → yaml
+    3. 写入新文件
+    4. 反序列化验证可读(yaml.safe_load 不抛错)
+    """
+    import shutil
+    from io import StringIO
+    if path.exists():
+        shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
+    data = _broadcast_config_to_dict(cfg)
+    buf = StringIO()
+    yaml.safe_dump(data, buf, allow_unicode=True, sort_keys=False)
+    path.write_text(buf.get_value(), encoding="utf-8")
+    # 验证
+    with path.open("r", encoding="utf-8") as f:
+        yaml.safe_load(f)
+
+
+def _broadcast_config_to_dict(cfg: BroadcastConfig) -> dict:
+    """BroadcastConfig → dict(只持久化跟 broadcast 相关的字段)。"""
+    return {
+        "broadcast": {
+            "times": list(cfg.times),
+            "weekdays_only": cfg.weekdays_only,
+            "skip_if_no_change": cfg.skip_if_no_change,
+            "per_status_thresholds": dict(cfg.per_status_thresholds),
+            "admin_broadcast_chats": list(cfg.admin_broadcast_chats),
+            "refresh_interval_minutes": cfg.refresh_interval_minutes,
+            "stuck_status_hours": dict(cfg.stuck_status_hours),
+            "store_monitor_interval_minutes": cfg.store_monitor_interval_minutes,
+            "store_monitor_min_hours": cfg.store_monitor_min_hours,
+            "store_monitor_max_hours": cfg.store_monitor_max_hours,
+            "store_monitor_proxy_url": cfg.store_monitor_proxy_url,
+            "online_check_interval_hours": cfg.online_check_interval_hours,
+            "online_check_max_attempts": cfg.online_check_max_attempts,
+            "online_check_retry_interval_minutes": cfg.online_check_retry_interval_minutes,
+            "online_check_proxy_api_url": cfg.online_check_proxy_api_url,
+            "online_check_default_country": cfg.online_check_default_country,
+        }
+    }
+
+
 def load_config(secrets_path: Path, sheets_path: Path) -> AppConfig:
     secrets = _read_yaml(secrets_path)
     sheets = _read_yaml(sheets_path)

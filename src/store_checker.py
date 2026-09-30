@@ -5,12 +5,15 @@ Google Play (和其他商店) 的上架/未上架判断：
 - 未上架/审核中：HTTP 200 但页面说"Item not found" / "not available"
 - 解析：找 app 标题元素存在与否；或页面文本含关键词
 
-Phase 1：直接 HTTP（无代理）。Phase 2 可加 proxy 轮换。
+代理池支持：通过 fetch_proxy_url(api_url, country) 获取单条代理 URL,
+再传给 check_app_published 的 proxy 参数。
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Optional
+from urllib.parse import urlencode
 
 import httpx
 
@@ -41,6 +44,43 @@ _TITLE_RE = re.compile(r'itemprop="name"[^>]*>([^<]+?)<', re.IGNORECASE)
 _PAGE_TITLE_RE = re.compile(r'<title>([^<]+?) - Apps on Google Play</title>', re.IGNORECASE)
 # 辅助：找 h1 标签（即使空）
 _H1_RE = re.compile(r'<h1[^>]*>', re.IGNORECASE)
+
+
+async def fetch_proxy_url(api_url: str, country: Optional[str] = None, timeout: float = 10.0) -> Optional[str]:
+    """从代理池 API 获取一个代理 URL。
+
+    Args:
+        api_url: 代理池 API 的 endpoint(完整 URL,带 scheme + path)
+        country: 可选国家/地区代码(US/JP/IN...);作为 query 参数 country=US 传给 API
+        timeout: API 请求超时
+
+    Returns:
+        代理 URL 字符串(如 "http://user:pass@ip:port");失败返回 None
+    """
+    if not api_url:
+        return None
+    params = {}
+    if country:
+        params["country"] = country
+    full_url = f"{api_url}?{urlencode(params)}" if params else api_url
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            r = await client.get(full_url)
+            r.raise_for_status()
+            data = r.json()
+    except Exception as e:  # noqa: BLE001
+        # 静默:代理获取失败回退到 direct;调用方处理
+        return None
+
+    # 兼容多种代理 API 响应格式: {"proxy": "..."} / {"url": "..."} / 字符串本身
+    if isinstance(data, str):
+        return data.strip() or None
+    if isinstance(data, dict):
+        for key in ("proxy", "proxy_url", "url", "server"):
+            v = data.get(key)
+            if v:
+                return str(v).strip()
+    return None
 
 
 async def check_app_published(

@@ -30,6 +30,12 @@ class BroadcastConfig:
     store_monitor_min_hours: int = 4           # 未上架时下次重试的最短间隔
     store_monitor_max_hours: int = 8           # 最长间隔
     store_monitor_proxy_url: str = ""          # 可选代理（留空=直连）
+    # === 在架监控（PUBLISHED 之后周期性检测是否仍可访问）===
+    online_check_interval_hours: int = 24      # 多长时间扫一次已发布项目
+    online_check_max_attempts: int = 3        # 连续失败多少次才认定下架(谨慎策略)
+    online_check_retry_interval_minutes: int = 5 # 失败重试间隔
+    online_check_proxy_api_url: str = ""       # 代理池 API endpoint(留空=默认直连)
+    online_check_default_country: str = ""     # 默认代理国家/地区(US/JP/IN...;空=不限)
 
 
 def load_scheduler_config(path: Path) -> BroadcastConfig:
