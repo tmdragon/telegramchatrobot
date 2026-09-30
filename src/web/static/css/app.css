@@ -503,6 +503,11 @@ a:hover { text-decoration: underline; }
 .online-row__check-time {
   font-family: var(--f-mono); font-size: 12px; color: var(--c-text-muted);
 }
+.online-row__published-at {
+  font-family: var(--f-mono); font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text);
+}
 .online-row__attempts {
   display: inline-block;
   padding: 1px 8px;

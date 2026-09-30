@@ -213,6 +213,7 @@ async def get_online_projects():
             "last_online_check_result": p.last_online_check_result,
             "offline_pending_since": p.offline_pending_since.isoformat() if p.offline_pending_since else None,
             "offline_pending_attempts": p.offline_pending_attempts,
+            "published_at": p.published_at.isoformat() if p.published_at else None,
         })
     return {"projects": items}
 

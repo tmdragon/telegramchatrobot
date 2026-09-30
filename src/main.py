@@ -130,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
         admin_broadcast_chats=(
             scheduler_cfg.admin_broadcast_chats if bot_service is not None else []
         ),
+        broadcast_cfg=scheduler_cfg,
     )
     app.state.cache = cache
     app.state.broadcast_svc = broadcast_svc

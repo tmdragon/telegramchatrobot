@@ -36,6 +36,7 @@ def create_app(
     scheduler: Optional[object] = None,
     admin_chat_id: Optional[int] = None,
     admin_broadcast_chats: Optional[list[str]] = None,
+    broadcast_cfg: Optional[object] = None,
 ) -> FastAPI:
     """构造并返回 FastAPI 应用实例。
 
@@ -100,6 +101,7 @@ def create_app(
     app.state.admin_chat_id = admin_chat_id
     app.state.cache = None  # T3 注入 ProjectCache
     app.state.broadcast_svc = None  # Phase 3 注入 BroadcastSvc
+    app.state.broadcast_cfg = broadcast_cfg  # Phase 3 注入 BroadcastConfig(scheduler.yaml)
 
     # Jinja2 环境（autoescape 默认 on：.html/.xml/.htm；这里强制 on 更稳）
     templates = Jinja2Templates(directory=TEMPLATES_DIR)

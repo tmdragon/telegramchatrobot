@@ -277,6 +277,7 @@ async def online_page(request: Request):
                 "last_online_check_at": p.last_online_check_at,
                 "last_online_check_result": p.last_online_check_result,
                 "offline_pending_attempts": p.offline_pending_attempts,
+                "published_at": p.published_at,
             })
     last = cache.last_refresh_at() if cache else None
     last_human = (

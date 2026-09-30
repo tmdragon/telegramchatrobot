@@ -16,13 +16,14 @@
       <table class="online-table" id="online-table">
         <thead>
           <tr>
-            <th style="width: 18%;">项目</th>
-            <th style="width: 12%;">状态</th>
-            <th style="width: 16%;">检测方式</th>
-            <th style="width: 12%;">上次检查</th>
-            <th style="width: 12%;">待确认次数</th>
-            <th style="width: 18%;">商店地址</th>
-            <th style="width: 12%; text-align: right;">操作</th>
+            <th style="width: 16%;">项目</th>
+            <th style="width: 11%;">状态</th>
+            <th style="width: 14%;">检测方式</th>
+            <th style="width: 12%;">在架时间</th>
+            <th style="width: 11%;">上次检查</th>
+            <th style="width: 9%;">待确认</th>
+            <th style="width: 16%;">商店地址</th>
+            <th style="width: 11%; text-align: right;">操作</th>
           </tr>
         </thead>
         <tbody data-online-tbody>
@@ -51,6 +52,14 @@
                 {% else %}
                   <span class="online-mode">直连</span>
                 {% endif %}
+              </td>
+              <td>
+                {% if p.published_at %}
+                  <span class="online-row__published-at"
+                        title="{{ p.published_at.isoformat() }}">
+                    {{ p.published_at.strftime('%Y-%m-%d %H:%M') }}
+                  </span>
+                {% else %}—{% endif %}
               </td>
               <td>
                 {% if p.last_online_check_at %}
