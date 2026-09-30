@@ -254,3 +254,73 @@ async def groups_page(request: Request):
             "last_refresh_human": last_human, "errors": [],
         },
     )
+
+
+@router.get("/online", response_class=HTMLResponse)
+async def online_page(request: Request):
+    """在架监控页面:只显示 PUBLISHED 项目,带在线状态。"""
+    app = request.app
+    cache = app.state.cache
+    templates = app.state.templates
+
+    items = []
+    if cache is not None:
+        for p in cache.list_projects():
+            if p.status is None or p.status.value != "PUBLISHED":
+                continue
+            items.append({
+                "project_id": p.project_id,
+                "project_name": p.project_name or "",
+                "store_url": p.store_url or "",
+                "check_mode": p.check_mode,
+                "proxy_country": p.proxy_country,
+                "last_online_check_at": p.last_online_check_at,
+                "last_online_check_result": p.last_online_check_result,
+                "offline_pending_attempts": p.offline_pending_attempts,
+            })
+    last = cache.last_refresh_at() if cache else None
+    last_human = (
+        last.astimezone(bot_templates.DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        if last else None
+    )
+    return templates.TemplateResponse(
+        request=request, name="online.html",
+        context={
+            "page_name": "online", "projects": items,
+            "last_refresh_at": last.isoformat() if last else None,
+            "last_refresh_human": last_human, "errors": [],
+        },
+    )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """设置页面:网页端编辑在架监控等配置。"""
+    app = request.app
+    templates = app.state.templates
+    # 从内存 store.cfg 拿当前值
+    from src.scheduler.config import BroadcastConfig
+    cfg = BroadcastConfig()
+    store = getattr(app.state, "store", None)
+    if store is not None and hasattr(store, "cfg"):
+        cfg = store.cfg
+    last = app.state.cache.last_refresh_at() if app.state.cache else None
+    last_human = (
+        last.astimezone(bot_templates.DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        if last else None
+    )
+    return templates.TemplateResponse(
+        request=request, name="settings.html",
+        context={
+            "page_name": "settings",
+            "config": {
+                "online_check_interval_hours": cfg.online_check_interval_hours,
+                "online_check_max_attempts": cfg.online_check_max_attempts,
+                "online_check_retry_interval_minutes": cfg.online_check_retry_interval_minutes,
+                "online_check_proxy_api_url": cfg.online_check_proxy_api_url,
+                "online_check_default_country": cfg.online_check_default_country,
+            },
+            "last_refresh_at": last.isoformat() if last else None,
+            "last_refresh_human": last_human, "errors": [],
+        },
+    )

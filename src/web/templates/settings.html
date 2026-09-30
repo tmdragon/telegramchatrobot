@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}设置 — checkGPRobot{% endblock %}
+
+{% block content %}
+<main class="page page--settings">
+  <header class="settings-header">
+    <h1>⚙️ 设置</h1>
+    <span class="settings-header__hint">网页端编辑配置,保存后服务自动重启</span>
+  </header>
+
+  {% include "partials/_error_banner.html" %}
+
+  <section class="settings-card">
+    <h2>📡 在架监控</h2>
+    <p class="settings-card__hint">
+      监控已发布项目(PUBLISHED)是否仍然在架。
+      检测到下架前会多次确认(谨慎策略),通过后改状态为"已下架"并广播。
+    </p>
+
+    <form id="online-check-form" autocomplete="off">
+      <div class="form-row">
+        <label class="form-row__label" for="cfg-interval">检测间隔(小时)</label>
+        <input id="cfg-interval" name="online_check_interval_hours" type="number"
+               min="1" max="168" step="1" required>
+        <span class="form-hint">每隔多少小时扫一次所有已发布项目(默认 24)</span>
+      </div>
+
+      <div class="form-row">
+        <label class="form-row__label" for="cfg-max-attempts">最大重试次数</label>
+        <input id="cfg-max-attempts" name="online_check_max_attempts" type="number"
+               min="1" max="10" step="1" required>
+        <span class="form-hint">连续失败多少次才认定下架(谨慎,默认 3)</span>
+      </div>
+
+      <div class="form-row">
+        <label class="form-row__label" for="cfg-retry-interval">重试间隔(分钟)</label>
+        <input id="cfg-retry-interval" name="online_check_retry_interval_minutes" type="number"
+               min="1" max="60" step="1" required>
+        <span class="form-hint">首次检测到疑似下架后,多久后再重试(默认 5)</span>
+      </div>
+
+      <div class="form-row">
+        <label class="form-row__label" for="cfg-proxy-api">代理池 API URL</label>
+        <input id="cfg-proxy-api" name="online_check_proxy_api_url" type="url"
+               placeholder="https://your-proxy-service.com/api/get">
+        <span class="form-hint">留空 = 全部直连;填了则按项目"代理国家"轮询</span>
+      </div>
+
+      <div class="form-row">
+        <label class="form-row__label" for="cfg-default-country">默认代理国家</label>
+        <input id="cfg-default-country" name="online_check_default_country" type="text"
+               placeholder="US / JP / IN ..." maxlength="8" style="text-transform: uppercase;">
+        <span class="form-hint">项目未单独设置代理国家时,用这个默认值</span>
+      </div>
+
+      <div class="modal__actions">
+        <button type="submit" id="cfg-save" class="btn btn--primary">💾 保存并重启</button>
+      </div>
+    </form>
+    <div id="cfg-error" class="form-error" hidden></div>
+    <div id="cfg-success" class="form-success" hidden></div>
+  </section>
+</main>
+{% endblock %}

@@ -191,6 +191,55 @@ async def post_broadcast_custom(request: Request, body: BroadcastCustomBody):
     return result
 
 
+@router.get("/online/projects")
+async def get_online_projects():
+    """列出所有 PUBLISHED 项目 + 在线监控状态(给 /online 页用)。"""
+    from src.models.status import StatusCode
+    app = request.app
+    cache = getattr(app.state, "cache", None)
+    if cache is None:
+        raise HTTPException(status_code=503, detail="cache not initialized")
+    items = []
+    for p in cache.list_projects():
+        if p.status is None or p.status.value != "PUBLISHED":
+            continue
+        items.append({
+            "project_id": p.project_id,
+            "project_name": p.project_name or "",
+            "store_url": p.store_url or "",
+            "check_mode": p.check_mode,
+            "proxy_country": p.proxy_country,
+            "last_online_check_at": p.last_online_check_at.isoformat() if p.last_online_check_at else None,
+            "last_online_check_result": p.last_online_check_result,
+            "offline_pending_since": p.offline_pending_since.isoformat() if p.offline_pending_since else None,
+            "offline_pending_attempts": p.offline_pending_attempts,
+        })
+    return {"projects": items}
+
+
+@router.post("/online/projects/{project_id}/recheck")
+async def post_online_recheck(project_id: str):
+    """手动触发单个项目的在架检查(忽略时间间隔,立刻查)。"""
+    app = request.app
+    broadcast_svc = getattr(app.state, "broadcast_svc", None)
+    cfg = getattr(app.state, "broadcast_cfg", None)
+    refresher = getattr(app.state, "refresher", None)
+    if broadcast_svc is None or cfg is None or refresher is None:
+        raise HTTPException(status_code=503, detail="online monitor not configured")
+    try:
+        from src.scheduler.jobs import _online_check_one
+        proj = refresher.cache.get(project_id) if refresher.cache else None
+        if proj is None:
+            raise HTTPException(status_code=404, detail=f"project {project_id} not found")
+        r = await _online_check_one(proj, broadcast_svc, cfg, refresher)
+        return r
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.exception("manual online recheck failed (project=%s)", project_id)
+        raise HTTPException(status_code=500, detail=f"recheck failed: {e}")
+
+
 @router.get("/statuses")
 async def get_statuses():
     """返回所有合法状态选项(用于项目详情页"状态"列的内联编辑下拉框)。
@@ -677,6 +726,108 @@ class UpdateGroupBody(BaseModel):
 
 class UpdateGroupProjectsBody(BaseModel):
     project_ids: list[str]  # desired set of project_ids;空字符串被忽略
+
+
+class OnlineCheckConfigBody(BaseModel):
+    """在架监控配置(网页端可编辑)。"""
+    online_check_interval_hours: int = 24
+    online_check_max_attempts: int = 3
+    online_check_retry_interval_minutes: int = 5
+    online_check_proxy_api_url: str = ""
+    online_check_default_country: str = ""
+
+
+@router.get("/config/online-check")
+async def get_online_check_config():
+    """返回当前在架监控配置(从内存 BroadcastConfig 读)。"""
+    app = request.app
+    scheduler = getattr(app.state, "scheduler", None)
+    # scheduler 不一定有 BroadcastConfig 直接暴露;从 store.cfg 拿
+    from src.scheduler.config import BroadcastConfig
+    cfg = BroadcastConfig()  # 默认;具体值由 scheduler 持有
+    # 尝试从 store / cache 拿实际配置
+    store = getattr(app.state, "store", None)
+    if store is not None and hasattr(store, "cfg"):
+        cfg = store.cfg
+    return {
+        "online_check_interval_hours": cfg.online_check_interval_hours,
+        "online_check_max_attempts": cfg.online_check_max_attempts,
+        "online_check_retry_interval_minutes": cfg.online_check_retry_interval_minutes,
+        "online_check_proxy_api_url": cfg.online_check_proxy_api_url,
+        "online_check_default_country": cfg.online_check_default_country,
+    }
+
+
+@router.put("/config/online-check")
+async def put_online_check_config(body: OnlineCheckConfigBody):
+    """更新在架监控配置(写到 scheduler.yaml + 触发服务重启)。
+
+    注:触发重启通过 subprocess 调 systemctl(需 NOPASSWD 配置)。
+    """
+    import subprocess
+    from pathlib import Path
+    from src.config import write_scheduler_config, load_config
+    from src.scheduler.config import BroadcastConfig
+
+    # 先尝试用现有 store 的 cfg 做基础
+    # 这里只能拿到部分字段;BroadcastConfig 含很多字段,
+    # 我们用现有值作为 base,只更新 in-shelf check 字段
+    app = request.app
+    # 从 store / cache 拿现有 cfg
+    base_cfg = None
+    store = getattr(app.state, "store", None)
+    if store is not None and hasattr(store, "cfg"):
+        base_cfg = store.cfg
+    if base_cfg is None:
+        base_cfg = BroadcastConfig()
+
+    # 覆盖在架监控字段
+    base_cfg.online_check_interval_hours = body.online_check_interval_hours
+    base_cfg.online_check_max_attempts = body.online_check_max_attempts
+    base_cfg.online_check_retry_interval_minutes = body.online_check_retry_interval_minutes
+    base_cfg.online_check_proxy_api_url = body.online_check_proxy_api_url
+    base_cfg.online_check_default_country = body.online_check_default_country
+
+    # 写 yaml
+    scheduler_yaml = Path("/etc/checkgprobot/scheduler.yaml")
+    if not scheduler_yaml.exists():
+        # fallback: 相对路径(开发环境)
+        from src.config import _env
+        alt = _env("CHECKGPROBOT_SCHEDULER_CONFIG")
+        if alt:
+            scheduler_yaml = Path(alt)
+        else:
+            scheduler_yaml = Path("config/scheduler.yaml")
+    try:
+        write_scheduler_config(scheduler_yaml, base_cfg)
+    except Exception as e:  # noqa: BLE001
+        log.exception("write_scheduler_config failed")
+        raise HTTPException(status_code=500, detail=f"write failed: {e}")
+
+    # 触发重启
+    restart_ok = False
+    restart_err = None
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "systemctl", "restart", "checkgprobot"],
+            capture_output=True, text=True, timeout=10,
+        )
+        restart_ok = (result.returncode == 0)
+        if not restart_ok:
+            restart_err = (result.stderr or result.stdout or "").strip() or f"exit {result.returncode}"
+    except FileNotFoundError:
+        restart_err = "sudo not found"
+    except subprocess.TimeoutExpired:
+        restart_err = "restart timeout"
+    except Exception as e:  # noqa: BLE001
+        restart_err = f"{type(e).__name__}: {e}"
+
+    return {
+        "ok": True,
+        "config_path": str(scheduler_yaml),
+        "restart_ok": restart_ok,
+        "restart_message": restart_err or "服务已重启",
+    }
 
 
 @router.get("/groups/manage")

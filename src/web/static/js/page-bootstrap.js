@@ -21,6 +21,8 @@ const PAGE_MODULES = {
   detail: () => import("./inline-edit.js"),
   groups: () => import("./groups.js"),
   mappings: () => import("./mappings-crud.js"),
+  online: () => import("./online.js"),
+  settings: () => import("./settings.js"),
 };
 
 const page = document.body.dataset.page || "overview";

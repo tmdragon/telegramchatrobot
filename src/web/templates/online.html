@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}在架监控 — checkGPRobot{% endblock %}
+
+{% block content %}
+<main class="page page--online">
+  <header class="online-header">
+    <h1>📡 在架监控</h1>
+    <span class="online-header__count">共 <strong data-online-count>{{ projects | length }}</strong> 个已发布项目</span>
+  </header>
+
+  {% include "partials/_error_banner.html" %}
+
+  {% if projects %}
+    <section class="online-card">
+      <table class="online-table" id="online-table">
+        <thead>
+          <tr>
+            <th style="width: 18%;">项目</th>
+            <th style="width: 12%;">状态</th>
+            <th style="width: 16%;">检测方式</th>
+            <th style="width: 12%;">上次检查</th>
+            <th style="width: 12%;">待确认次数</th>
+            <th style="width: 18%;">商店地址</th>
+            <th style="width: 12%; text-align: right;">操作</th>
+          </tr>
+        </thead>
+        <tbody data-online-tbody>
+          {% for p in projects %}
+            <tr class="online-row"
+                data-project-id="{{ p.project_id }}"
+                data-result="{{ p.last_online_check_result or 'unknown' }}">
+              <td>
+                <a href="/project/{{ p.project_id }}" class="online-row__id">{{ p.project_id }}</a>
+                {% if p.project_name %}<div class="online-row__name">{{ p.project_name }}</div>{% endif %}
+              </td>
+              <td>
+                {% if p.last_online_check_result == 'online' %}
+                  <span class="online-badge online-badge--online">● 在线</span>
+                {% elif p.last_online_check_result == 'offline_pending' %}
+                  <span class="online-badge online-badge--pending">● 确认中</span>
+                {% elif p.last_online_check_result == 'offline_confirmed' %}
+                  <span class="online-badge online-badge--offline">● 已下架</span>
+                {% else %}
+                  <span class="online-badge online-badge--unknown">● 未检查</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.check_mode == 'proxy' %}
+                  <span class="online-mode">代理{% if p.proxy_country %} · {{ p.proxy_country }}{% endif %}</span>
+                {% else %}
+                  <span class="online-mode">直连</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.last_online_check_at %}
+                  <span class="online-row__check-time" title="{{ p.last_online_check_at.isoformat() }}">
+                    {{ p.last_online_check_at.strftime('%m-%d %H:%M') }}
+                  </span>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if p.offline_pending_attempts > 0 %}
+                  <span class="online-row__attempts">{{ p.offline_pending_attempts }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if p.store_url %}
+                  <a href="{{ p.store_url }}" target="_blank" rel="noopener"
+                     class="online-row__url" title="{{ p.store_url }}">
+                    🔗
+                  </a>
+                {% else %}—{% endif %}
+              </td>
+              <td style="text-align: right;">
+                <button type="button" class="online-recheck-btn"
+                        data-action="online-recheck" data-project-id="{{ p.project_id }}">
+                  🔄 重测
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% else %}
+    <p class="empty-state">暂无已发布项目。先把项目状态推到 <code>已发布</code> 后,这里会自动出现。</p>
+  {% endif %}
+</main>
+{% endblock %}
