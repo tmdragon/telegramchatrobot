@@ -21,12 +21,22 @@ import { filterSelectOptions, wireSearchInput } from "./select-filter.js";
 import { initBroadcastModal } from "./broadcast-all.js";
 
 function _openNewGroupModal(modal, form) {
-  _clearError(form);
-  form.reset();
+  // 简化版:任何步骤失败都尝试把 modal 打开
+  try { _clearError(form); } catch (e) { console.warn("clearError", e); }
+  try { form.reset(); } catch (e) { console.warn("form.reset", e); }
   const select = form.querySelector("#ng-project-id");
-  if (select) filterSelectOptions(select, "");
-  _openModal(modal);
-  form.querySelector("#ng-chat-id").focus();
+  if (select) {
+    try { filterSelectOptions(select, ""); } catch (e) { console.warn("filterSelectOptions", e); }
+  }
+  // 直接显示 modal,不依赖 _openModal
+  modal.hidden = false;
+  modal.removeAttribute("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  // focus chat_id
+  const chatInput = form.querySelector("#ng-chat-id");
+  if (chatInput) {
+    try { chatInput.focus(); } catch (e) { console.warn("focus", e); }
+  }
 }
 
 function _closeModal(modal) {
@@ -128,39 +138,54 @@ async function _testSend(chatId) {
 }
 
 export function init() {
+  console.log("[groups] init() running");
   const newBtn = document.getElementById("btn-new-group");
   const newModal = document.getElementById("new-group-modal");
   const newForm = document.getElementById("new-group-form");
   const editModal = document.getElementById("edit-group-modal");
   const editForm = document.getElementById("edit-group-form");
-  if (!newBtn || !newModal || !newForm) return;
+  if (!newBtn || !newModal || !newForm) {
+    console.warn("[groups] missing required elements", { newBtn, newModal, newForm });
+    return;
+  }
+  console.log("[groups] all required elements found");
 
-  newBtn.addEventListener("click", () => _openNewGroupModal(newModal, newForm));
+  newBtn.addEventListener("click", () => {
+    console.log("[groups] new-group button clicked");
+    try {
+      _openNewGroupModal(newModal, newForm);
+    } catch (e) {
+      console.error("[groups] _openNewGroupModal error", e);
+      alert("打开新建群弹窗失败: " + e.message);
+    }
+  });
   wireSearchInput("ng-project-search", "ng-project-id");
 
   document.querySelectorAll("[data-modal-close]").forEach((el) => {
     el.addEventListener("click", () => {
-      if (!newModal.hidden) _closeModal(newModal);
-      if (editModal && !editModal.hidden) _closeModal(editModal);
+      try {
+        if (!newModal.hidden) _closeModal(newModal);
+        if (editModal && !editModal.hidden) _closeModal(editModal);
+      } catch (e) { console.error("close modal", e); }
     });
   });
 
   newForm.addEventListener("submit", (ev) => {
     ev.preventDefault();
-    _submitNewGroup(newForm);
+    try { _submitNewGroup(newForm); } catch (e) { console.error("submit new", e); }
   });
   if (editForm) {
     editForm.addEventListener("submit", (ev) => {
       ev.preventDefault();
-      _submitEditGroup(editForm);
+      try { _submitEditGroup(editForm); } catch (e) { console.error("submit edit", e); }
     });
   }
 
-  // 编辑群:添加项目按钮
-  wireAddProjectControl();
+  // 编辑群:添加项目按钮(try/catch 保护,失败不影响新建群)
+  try { wireAddProjectControl(); } catch (e) { console.error("wireAddProjectControl", e); }
 
-  // 一键广播 modal(modal 打开 + 节日预设 + 发送)
-  initBroadcastModal();
+  // 一键广播 modal(同上)
+  try { initBroadcastModal(); } catch (e) { console.error("initBroadcastModal", e); }
 
   // 行内按钮(委托)
   const tbody = document.querySelector("[data-groups-tbody]");
@@ -172,12 +197,14 @@ export function init() {
       const chatId = btn.dataset.chatId;
       const row = btn.closest(".groups-row");
       if (action === "group-edit" && row && editModal && editForm) {
-        _openEditModal(row, editModal, editForm);
+        try { _openEditModal(row, editModal, editForm); } catch (e) { console.error("_openEditModal", e); }
       } else if (action === "group-delete") {
-        const ok = await confirmDialog(`停用群 ${chatId}(该 chat_id 下所有映射会被设为停用)?`);
-        if (ok) await _deleteGroup(chatId);
+        try {
+          const ok = await confirmDialog(`停用群 ${chatId}(该 chat_id 下所有映射会被设为停用)?`);
+          if (ok) await _deleteGroup(chatId);
+        } catch (e) { console.error("group-delete", e); }
       } else if (action === "group-test-send") {
-        await _testSend(chatId);
+        try { await _testSend(chatId); } catch (e) { console.error("group-test-send", e); }
       }
     });
   }
