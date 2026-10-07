@@ -146,6 +146,50 @@ class BotService:
             chat_id=chat_id, text=text, parse_mode="MarkdownV2"
         )
 
+    async def send_photo(
+        self,
+        chat_id: int | str,
+        file_id: str,
+        caption: Optional[str] = None,
+    ) -> None:
+        """用 Telegram file_id 发送图片(无需重新上传二进制)。
+        caption 用 MarkdownV2。
+        """
+        if self._app is None:
+            raise RuntimeError("BotService not started")
+        await self._app.bot.send_photo(
+            chat_id=chat_id, photo=file_id, caption=caption,
+            parse_mode="MarkdownV2" if caption else None,
+        )
+
+    async def upload_photo_to_storage(
+        self,
+        file_bytes: bytes,
+        storage_chat_id: int | str,
+        caption: Optional[str] = None,
+    ) -> str:
+        """把图片上传到 storage_chat_id(通常是 admin 的私聊),返回 Telegram file_id。
+
+        file_id 长期有效(只要 bot 不删除那条消息),后续用 send_photo(file_id=...) 重发即可。
+
+        Returns:
+            Telegram file_id(str)
+
+        Raises:
+            RuntimeError if bot not started / send fails
+        """
+        if self._app is None:
+            raise RuntimeError("BotService not started")
+        import io
+        msg = await self._app.bot.send_photo(
+            chat_id=storage_chat_id,
+            photo=file_bytes,
+            caption=caption,
+        )
+        # 返回最大尺寸的 file_id(兼容性最好)
+        photo = msg.photo[-1]
+        return photo.file_id
+
     async def get_chat_id_hint(self) -> Optional[int]:
         """返回最近一次任意 update 的 from_user.id，供 admin 自助查 chat_id。"""
         return self._last_update_user_id

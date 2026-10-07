@@ -780,3 +780,50 @@ def test_post_broadcast_custom_rejects_empty_content():
     r = client.post("/api/broadcast/custom", json={"content": "   "})
     assert r.status_code == 400
     assert "content" in r.json()["detail"].lower() or "为空" in r.json()["detail"]
+
+
+def test_store_payment_info_save_and_get(tmp_path):
+    """save_payment_info 应该 upsert,get_payment_info 应该读出来。"""
+    from src.store.db import Store
+    db_path = tmp_path / "test.db"
+    store = Store(db_path=db_path)
+    store.init_schema()
+    store.save_payment_info(
+        chat_id="-1001",
+        qr_file_id="AgAC_file_id_xyz",
+        wallet_address="0x123abc",
+    )
+    info = store.get_payment_info("-1001")
+    assert info is not None
+    assert info["qr_file_id"] == "AgAC_file_id_xyz"
+    assert info["wallet_address"] == "0x123abc"
+    assert info["updated_at"] is not None
+
+    # 再存一次,upsert 更新
+    store.save_payment_info(
+        chat_id="-1001",
+        qr_file_id="AgAC_new_file_id",
+        wallet_address="0x456def",
+    )
+    info2 = store.get_payment_info("-1001")
+    assert info2["qr_file_id"] == "AgAC_new_file_id"
+    assert info2["wallet_address"] == "0x456def"
+
+
+def test_store_payment_info_delete(tmp_path):
+    """delete_payment_info 应该清掉该 chat_id 的记录。"""
+    from src.store.db import Store
+    store = Store(db_path=tmp_path / "test.db")
+    store.init_schema()
+    store.save_payment_info("-1001", qr_file_id="x", wallet_address="y")
+    assert store.get_payment_info("-1001") is not None
+    store.delete_payment_info("-1001")
+    assert store.get_payment_info("-1001") is None
+
+
+def test_store_payment_info_get_missing_returns_none(tmp_path):
+    """get_payment_info 没记录时返回 None。"""
+    from src.store.db import Store
+    store = Store(db_path=tmp_path / "test.db")
+    store.init_schema()
+    assert store.get_payment_info("-9999") is None

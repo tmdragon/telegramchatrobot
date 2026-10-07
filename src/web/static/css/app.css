@@ -568,6 +568,30 @@ a:hover { text-decoration: underline; }
 }
 .form-success[hidden] { display: none; }
 
+/* 结算信息(/settings 页) */
+.pay-current {
+  padding: var(--s-3);
+  background: var(--c-surface-2);
+  border-radius: var(--r-sm);
+  margin-bottom: var(--s-3);
+}
+.pay-current__info { font-size: 13px; }
+.pay-current__wallet {
+  margin-top: 6px;
+  font-family: var(--f-mono);
+  font-size: 13px;
+  word-break: break-all;
+}
+.pay-current__meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--c-text-subtle);
+}
+.pay-current__empty {
+  font-size: 13px;
+  color: var(--c-text-muted);
+}
+
 /* ===== Sidebar (左导航) ===== */
 .sidebar {
   position: fixed;

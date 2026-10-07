@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import unquote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -216,6 +216,85 @@ async def get_online_projects():
             "published_at": p.published_at.isoformat() if p.published_at else None,
         })
     return {"projects": items}
+
+
+@router.get("/payment")
+async def get_payment(request: Request):
+    """返回全局结算信息(钱包统一,只此一条)。"""
+    store = getattr(request.app.state, "store", None)
+    if store is None:
+        raise HTTPException(status_code=503, detail="store not configured")
+    GLOBAL_KEY = "*"
+    try:
+        info = await asyncio.to_thread(store.get_payment_info, GLOBAL_KEY)
+    except Exception as e:  # noqa: BLE001
+        log.exception("get_payment_info failed")
+        raise HTTPException(status_code=502, detail=f"store read failed: {e}")
+    if info is None:
+        return {"configured": False}
+    return {"configured": True, **info}
+
+
+@router.put("/payment")
+async def put_payment(
+    request: Request,
+    qr: UploadFile = File(...),
+    wallet_address: str = Form(...),
+):
+    """上传 QR + 设置钱包地址(全局单条)。文件先传到 bot 存储 chat,拿 file_id 存 DB。
+
+    multipart/form-data: qr=图片文件, wallet_address=文本
+    """
+    store = getattr(request.app.state, "store", None)
+    bot_service = getattr(request.app.state, "bot_service", None)
+    admin_chat_id = getattr(request.app.state, "admin_chat_id", None)
+    if store is None or bot_service is None or admin_chat_id is None:
+        raise HTTPException(status_code=503, detail="bot / store not configured")
+
+    try:
+        file_bytes = await qr.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="qr 文件为空")
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.exception("read qr file failed")
+        raise HTTPException(status_code=500, detail=f"file read failed: {e}")
+
+    try:
+        file_id = await bot_service.upload_photo_to_storage(
+            file_bytes=file_bytes,
+            storage_chat_id=admin_chat_id,
+            caption="global payment info (QR + wallet)",
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("upload_photo_to_storage failed")
+        raise HTTPException(status_code=502, detail=f"telegram upload failed: {e}")
+
+    GLOBAL_KEY = "*"
+    try:
+        await asyncio.to_thread(
+            store.save_payment_info, GLOBAL_KEY, file_id, wallet_address.strip(),
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("save_payment_info failed")
+        raise HTTPException(status_code=500, detail=f"db save failed: {e}")
+    return {"qr_file_id": file_id, "wallet_address": wallet_address}
+
+
+@router.delete("/payment")
+async def delete_payment(request: Request):
+    """清空全局结算信息(不删 Telegram 上的图片,只是不再引用)。"""
+    store = getattr(request.app.state, "store", None)
+    if store is None:
+        raise HTTPException(status_code=503, detail="store not configured")
+    GLOBAL_KEY = "*"
+    try:
+        await asyncio.to_thread(store.delete_payment_info, GLOBAL_KEY)
+    except Exception as e:  # noqa: BLE001
+        log.exception("delete_payment_info failed")
+        raise HTTPException(status_code=502, detail=f"db delete failed: {e}")
+    return {"deleted": True}
 
 
 @router.post("/online/projects/{project_id}/recheck")

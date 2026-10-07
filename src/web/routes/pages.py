@@ -305,6 +305,13 @@ async def settings_page(request: Request):
     store = getattr(app.state, "store", None)
     if store is not None and hasattr(store, "cfg"):
         cfg = store.cfg
+    # 从 store 拿当前 payment_info(全局,key="*")
+    payment_info = None
+    if store is not None:
+        try:
+            payment_info = store.get_payment_info("*")
+        except Exception:
+            payment_info = None
     last = app.state.cache.last_refresh_at() if app.state.cache else None
     last_human = (
         last.astimezone(bot_templates.DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
@@ -321,6 +328,7 @@ async def settings_page(request: Request):
                 "online_check_proxy_api_url": cfg.online_check_proxy_api_url,
                 "online_check_default_country": cfg.online_check_default_country,
             },
+            "payment_info": payment_info,
             "last_refresh_at": last.isoformat() if last else None,
             "last_refresh_human": last_human, "errors": [],
         },

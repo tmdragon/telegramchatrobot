@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS status_history (
   PRIMARY KEY (project_id, status_code, detected_at)
 );
 
+CREATE TABLE IF NOT EXISTS payment_info (
+  chat_id           TEXT PRIMARY KEY,
+  qr_file_id        TEXT,
+  wallet_address    TEXT,
+  updated_at        TEXT
+);
+
 CREATE TABLE IF NOT EXISTS project_state (
   project_id          TEXT PRIMARY KEY,
   status_code         TEXT,
@@ -213,6 +220,47 @@ class Store:
                    VALUES (?, ?, ?)""",
                 (project_id, status_code, detected_at.isoformat()),
             )
+            conn.commit()
+
+    # === 结算信息(/结算 指令用,按 chat_id 存) ===
+
+    def save_payment_info(
+        self,
+        chat_id: str,
+        qr_file_id: str,
+        wallet_address: str,
+    ) -> None:
+        """upsert 该 chat_id 的结算信息(QR file_id + 钱包地址)。"""
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        with self._conn() as conn:
+            conn.execute(
+                """INSERT INTO payment_info (chat_id, qr_file_id, wallet_address, updated_at)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(chat_id) DO UPDATE SET
+                     qr_file_id = excluded.qr_file_id,
+                     wallet_address = excluded.wallet_address,
+                     updated_at = excluded.updated_at""",
+                (chat_id, qr_file_id, wallet_address, now),
+            )
+            conn.commit()
+
+    def get_payment_info(self, chat_id: str) -> Optional[dict]:
+        """返回 {qr_file_id, wallet_address, updated_at};无记录返回 None。"""
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT qr_file_id, wallet_address, updated_at FROM payment_info
+                   WHERE chat_id = ?""",
+                (chat_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {"qr_file_id": row[0], "wallet_address": row[1], "updated_at": row[2]}
+
+    def delete_payment_info(self, chat_id: str) -> None:
+        """删除该 chat_id 的结算信息(无记录时静默 noop)。"""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM payment_info WHERE chat_id = ?", (chat_id,))
             conn.commit()
 
     def get_latest_status_at(

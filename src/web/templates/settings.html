@@ -61,5 +61,51 @@
     <div id="cfg-error" class="form-error" hidden></div>
     <div id="cfg-success" class="form-success" hidden></div>
   </section>
+
+  <section class="settings-card">
+    <h2>💳 结算信息(全局统一)</h2>
+    <p class="settings-card__hint">
+      钱包对所有客户统一,客户在群里发 <code>/结算</code>,bot 自动把 QR + 钱包地址发回去。
+      图片传到 Telegram 私有存储,长期有效(file_id 复用)。
+    </p>
+
+    <div id="pay-current" class="pay-current">
+      {% if payment_info %}
+        <div class="pay-current__info">
+          <strong>✅ 已配置</strong>
+          <div class="pay-current__wallet">
+            <code>{{ payment_info.wallet_address }}</code>
+          </div>
+          <div class="pay-current__meta">
+            QR file_id: <code>{{ payment_info.qr_file_id[:24] }}…</code>
+            · 更新于 {{ payment_info.updated_at[:19] }}
+          </div>
+        </div>
+      {% else %}
+        <div class="pay-current__empty">
+          ⚠ 尚未配置。客户在群里发 <code>/结算</code> 会收到提示联系管理员。
+        </div>
+      {% endif %}
+    </div>
+
+    <form id="pay-form" autocomplete="off" enctype="multipart/form-data">
+      <div class="form-row">
+        <label class="form-row__label" for="pay-qr">二维码图片 (PNG/JPG)</label>
+        <input id="pay-qr" name="qr" type="file" accept="image/png,image/jpeg" required>
+        <span class="form-hint">替换时直接选新文件即可</span>
+      </div>
+      <div class="form-row">
+        <label class="form-row__label" for="pay-wallet">钱包地址</label>
+        <input id="pay-wallet" name="wallet_address" type="text"
+               placeholder="USDT-TRC20 地址 / ETH 地址 / 其他..." required>
+      </div>
+      <div class="modal__actions">
+        <button type="submit" id="pay-save" class="btn btn--primary">💾 保存结算信息</button>
+        <button type="button" id="pay-delete" class="btn btn--ghost" hidden>🗑 删除</button>
+      </div>
+    </form>
+    <div id="pay-error" class="form-error" hidden></div>
+    <div id="pay-success" class="form-success" hidden></div>
+  </section>
 </main>
 {% endblock %}

@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING, Any, Optional
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
 
+import asyncio
+import logging
+log = logging.getLogger(__name__)
+
 from src.web.cache import ProjectCache
 
 if TYPE_CHECKING:
@@ -403,6 +407,44 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _reply_plain(update, "\n".join(lines))
 
 
+async def settle_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """客户在群里发 /结算 → bot 把全局配置的 QR + 钱包地址发回。
+
+    钱包是统一的(对所有客户收款都用同一个),所以 bot 不查 chat_id,
+    直接读 store 里 chat_id="*" 的一条全局记录。
+    """
+    chat_id = update.effective_chat.id
+    if chat_id is None:
+        await _reply_plain(update, "无法识别当前群。")
+        return
+    store = context.bot_data["store"]
+    bot_service = context.bot_data["bot_service"]
+
+    GLOBAL_KEY = "*"  # 钱包统一,所有客户群共用这一条
+    try:
+        info = await asyncio.to_thread(store.get_payment_info, GLOBAL_KEY)
+    except Exception as e:  # noqa: BLE001
+        await _reply_plain(update, f"读取结算信息失败: {type(e).__name__}: {e}")
+        return
+
+    if info is None or not info.get("qr_file_id"):
+        await _reply_plain(
+            update,
+            "尚未配置结算信息。请联系管理员通过 Web 后台 /settings 上传二维码 + 钱包地址。",
+        )
+        return
+
+    wallet = info.get("wallet_address") or ""
+    caption = f"💰 结算信息\n\n钱包地址:\n`{wallet}`\n\n请扫码完成支付 🙏"
+    try:
+        await bot_service.send_photo(
+            chat_id=chat_id, file_id=info["qr_file_id"], caption=caption,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("settle_cmd send_photo failed (chat=%s)", chat_id)
+        await _reply_plain(update, f"发送失败: {type(e).__name__}: {e}")
+
+
 def register_handlers(
     app: Any,
     *,
@@ -431,4 +473,9 @@ def register_handlers(
     app.add_handler(CommandHandler("reload", reload_cmd))
     app.add_handler(CommandHandler("dryrun", dryrun_cmd))
     app.add_handler(CommandHandler("info", info_cmd))
+    # /结算 是中文命令,CommandHandler 不支持非 ASCII,改用 MessageHandler + 正则
+    app.add_handler(MessageHandler(
+        filters.Regex(r"^/结算(@\w+)?(\s|$)") & ~filters.COMMAND,
+        settle_cmd,
+    ))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, _record_user_id))

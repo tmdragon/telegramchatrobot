@@ -476,3 +476,59 @@ async def test_chatid_cmd_replies_with_chat_id():
     u.message.reply_text.assert_awaited_once()
     text = u.message.reply_text.await_args.args[0]
     assert "-1001234567890" in text
+
+def test_settle_cmd_sends_photo_when_configured(monkeypatch):
+    """settle_cmd 应该从 store 拿 file_id + wallet,然后 bot.send_photo。"""
+    import asyncio
+    from src.bot import commands
+
+    fake_info = {"qr_file_id": "AgAC_xyz", "wallet_address": "0xABC"}
+    fake_store = MagicMock()
+    fake_store.get_payment_info.return_value = fake_info
+    fake_bot_service = MagicMock()
+    fake_bot_service.send_photo = AsyncMock()
+
+    update = MagicMock()
+    update.effective_chat.id = -1001
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+    context.bot_data = {
+        "store": fake_store,
+        "bot_service": fake_bot_service,
+        "admin_chat_id": 999,
+    }
+
+    asyncio.run(commands.settle_cmd(update, context))
+    fake_bot_service.send_photo.assert_awaited_once()
+    call = fake_bot_service.send_photo.call_args
+    assert call.kwargs["chat_id"] == -1001
+    assert call.kwargs["file_id"] == "AgAC_xyz"
+    assert "0xABC" in call.kwargs["caption"]
+
+
+def test_settle_cmd_no_config_sends_text_only(monkeypatch):
+    """未配置时不应调 send_photo,只发提示文本。"""
+    import asyncio
+    from src.bot import commands
+
+    fake_store = MagicMock()
+    fake_store.get_payment_info.return_value = None
+    fake_bot_service = MagicMock()
+    fake_bot_service.send_photo = AsyncMock()
+    update = MagicMock()
+    update.effective_chat.id = -1002
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+    context.bot_data = {
+        "store": fake_store,
+        "bot_service": fake_bot_service,
+        "admin_chat_id": 999,
+    }
+
+    asyncio.run(commands.settle_cmd(update, context))
+    fake_bot_service.send_photo.assert_not_called()
+    update.message.reply_text.assert_awaited_once()
+    msg = update.message.reply_text.call_args.args[0]
+    assert "未配置" in msg or "尚未配置" in msg
