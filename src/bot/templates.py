@@ -56,6 +56,27 @@ def _set_display_tz(tz_name: str) -> None:
         DISPLAY_TZ = timezone.utc
 
 
+# Telegram MarkdownV2 reserved 字符(在普通文本和 entity 内部都要 \ 转义)
+# 见 https://core.telegram.org/bots/api#markdownv2-style
+_MD2_RESERVED = r"_*[]()~`>#+-=|{}.!"
+
+
+def escape_markdown_v2(text: str) -> str:
+    """转义 Telegram MarkdownV2 reserved 字符。
+
+    用于用户/外部输入(钱包地址、项目编号、文件名等)在 caption/text 中作为
+    字面文本插入时,避免被解析器当成 parts keyword,导致
+    "Can't parse entities: character 'X' is reserved"。
+
+    实现:把每个 reserved 字符前加 `\\`。注意 code/pre entity 内部的 reserved
+    也要求 escape(按 Telegram 文档, ` ` ` ` 和 `\\` 是必须的,其他字符若不
+    escape 在某些 entity 类型下会被解析出错,所以全部 escape 最稳妥)。
+    """
+    if not text:
+        return text
+    return "".join("\\" + ch if ch in _MD2_RESERVED else ch for ch in text)
+
+
 STATUS_EMOJI: dict[StatusCode, str] = {
     StatusCode.ORDERED: "🔵",
     StatusCode.MAKING: "🟣",

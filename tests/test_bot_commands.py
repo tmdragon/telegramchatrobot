@@ -532,3 +532,45 @@ def test_settle_cmd_no_config_sends_text_only(monkeypatch):
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.call_args.args[0]
     assert "未配置" in msg or "尚未配置" in msg
+
+
+def test_settle_cmd_caption_escapes_markdownv2_reserved_chars():
+    """settle_cmd 发的 caption 在 MarkdownV2 模式下不应含未转义的 reserved 字符。
+
+    之前 Bug:caption 含 "(拼音全拼)" + 未转义的 wallet 地址 → Telegram 报
+    "BadRequest: Can't parse entities: character '(' is reserved and must be escaped"
+    修复:caption 里任何 (、)、.、- 等 MarkdownV2 reserved 字符都要 \\ 前缀。
+    """
+    import asyncio
+    from src.bot import commands
+
+    # wallet_address 含 . 和 _ (都是 MarkdownV2 reserved)
+    fake_info = {"qr_file_id": "AgAC_xyz", "wallet_address": "0xABC.test-wallet"}
+    fake_store = MagicMock()
+    fake_store.get_payment_info.return_value = fake_info
+    fake_bot_service = MagicMock()
+    fake_bot_service.send_photo = AsyncMock()
+
+    update = MagicMock()
+    update.effective_chat.id = -1003
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+    context.bot_data = {
+        "store": fake_store,
+        "bot_service": fake_bot_service,
+        "admin_chat_id": 999,
+    }
+
+    asyncio.run(commands.settle_cmd(update, context))
+    caption = fake_bot_service.send_photo.call_args.kwargs["caption"]
+
+    # 静态文案里"(拼音全拼)"必须已被 escape
+    assert r"\(拼音全拼\)" in caption, (
+        f"caption 应含 \\\\(拼音全拼\\\\),实际: {caption!r}"
+    )
+    # 钱包地址里的 . 必须被 escape(以 \\. 形式出现)
+    # 注意:wallet 在 ``` code block ``` 里,所以里面的 . 仍需 escape
+    assert r"0xABC\.test\-wallet" in caption, (
+        f"caption 应含转义后的 wallet 地址,实际: {caption!r}"
+    )

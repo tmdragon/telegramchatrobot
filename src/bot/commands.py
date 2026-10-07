@@ -435,15 +435,19 @@ async def settle_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     wallet = info.get("wallet_address") or ""
+    # MarkdownV2:wallet / 拼音全拼 的 ( ) 都是 reserved,必须 \ 转义
+    # 见 src/bot/templates.py:escape_markdown_v2
+    from src.bot.templates import escape_markdown_v2
+    wallet_safe = escape_markdown_v2(wallet)
     caption = (
         f"💰 结算信息\n\n"
-        f"钱包地址:\n`{wallet}`\n\n"
+        f"钱包地址:\n`{wallet_safe}`\n\n"
         f"请扫码完成支付 🙏\n\n"
         f"——————————\n"
         f"⚠️ 反诈提醒\n"
         f"• 以上信息为机器人自动发送\n"
         f"• 地址需要找 @zhuangtailianghao 核对\n"
-        f"• 唯一账号:@zhuangtailianghao(拼音全拼)\n"
+        f"• 唯一账号:@zhuangtailianghao\\(拼音全拼\\)\n"
         f"• 状态良好,请仔细核对确认人 ID,防止被骗"
     )
     try:
