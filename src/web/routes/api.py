@@ -269,6 +269,14 @@ async def put_payment(
         )
     except Exception as e:  # noqa: BLE001
         log.exception("upload_photo_to_storage failed")
+        # Telegram Forbidden:bot can't initiate conversation with a user
+        # 意思是 admin 没在私聊里给 bot 发过 /start,bot 不能主动发消息
+        err_detail = str(e)
+        if "Forbidden" in err_detail or "can't initiate" in err_detail:
+            raise HTTPException(
+                status_code=400,
+                detail="bot 不能主动给 admin 发消息。请先在 Telegram 私聊 bot 发一次 /start 激活 DM 权限,再试。",
+            )
         raise HTTPException(status_code=502, detail=f"telegram upload failed: {e}")
 
     GLOBAL_KEY = "*"
@@ -818,8 +826,8 @@ class OnlineCheckConfigBody(BaseModel):
 
 
 @router.get("/config/online-check")
-async def get_online_check_config():
-    """返回当前在架监控配置(从内存 BroadcastConfig 读)。"""
+async def get_online_check_config(request: Request):
+    """返回当前在架监控配置(从内存BroadcastConfig 读)。"""
     app = request.app
     scheduler = getattr(app.state, "scheduler", None)
     # scheduler 不一定有 BroadcastConfig 直接暴露;从 store.cfg 拿
