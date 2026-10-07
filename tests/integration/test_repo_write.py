@@ -379,6 +379,52 @@ def test_append_reconciliation_writes_to_columns_B_and_D():
     fake_ws.append_row.assert_not_called()
 
 
+def test_fetch_all_skips_reconciliation_role():
+    """reconciliation role 的 spreadsheet 不被 fetch_all 当项目表处理。
+
+    背景:对账表 B 列叫"编号",匹配 PROJECT_ID_CANDIDATES 中的"编号"。
+    若 fetch_all 不跳过 reconciliation role,所有结算行(FF-01/K1-236 等)
+    会被 HeaderDetector 识别成假项目,污染 ProjectCache。
+
+    reconciliation 仅在写入路径使用(append_reconciliation 写 B/D 列),
+    不参与项目数据流。
+    """
+    master_ws = MagicMock()
+    master_ws.title = "项目主表"
+    master_ws.get_all_values.return_value = [
+        ["项目编号", "状态", "项目名"],
+        ["WW-700", "已下单", "测试项目"],
+    ]
+
+    fake_client = MagicMock()
+
+    def open_by_key(ss_id):
+        m = MagicMock()
+        m.worksheet = lambda name: master_ws
+        return m
+    fake_client.open_by_key.side_effect = open_by_key
+
+    repo = SheetRepo(fake_client)
+    projects = repo.fetch_all([
+        SpreadsheetConfig(id="master-id", name="项目主表", role="master"),
+        SpreadsheetConfig(id="recon-id", name="工作表1", role="reconciliation"),
+    ])
+
+    # master 应被读取
+    fake_client.open_by_key.assert_any_call("master-id")
+    # reconciliation 不应被 open_by_key 调用(被跳过)
+    for call_args in fake_client.open_by_key.call_args_list:
+        assert call_args.args[0] != "recon-id", (
+            "fetch_all 不应 open_by_key('recon-id') — reconciliation role 应被跳过"
+        )
+
+    # master 的项目应进入结果
+    project_ids = {p.project_id for p in projects}
+    assert "WW-700" in project_ids
+    # 防御性断言:reconciliation 不应污染(即使 mock 行为变了)
+    assert "FF-01" not in project_ids
+
+
 
 import asyncio
 from unittest.mock import AsyncMock

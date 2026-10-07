@@ -47,10 +47,17 @@ class SheetRepo:
         self.client = client
 
     def fetch_all(self, spreadsheets: Iterable[SpreadsheetConfig]) -> list[Project]:
-        """拉取所有 spreadsheets 的数据，按 project_id 合并。"""
+        """拉取所有 spreadsheets 的数据，按 project_id 合并。
+
+        跳过 role == "reconciliation" 的 spreadsheet:它只用于 append_reconciliation
+        写入路径(写 B/D 列),表头"编号"会跟 PROJECT_ID_CANDIDATES 撞上,
+        把结算行误识别成假项目,污染 ProjectCache。
+        """
         projects_by_id: dict[str, Project] = {}
 
         for ss in spreadsheets:
+            if ss.role == "reconciliation":
+                continue  # 对账表不入项目数据流,只用于 append_reconciliation 写入
             sh = self.client.open_by_key(ss.id)
             ws = sh.worksheet(ss.name)  # 默认用同名 worksheet
             rows = ws.get_all_values()
