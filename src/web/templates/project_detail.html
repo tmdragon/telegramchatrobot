@@ -5,7 +5,11 @@
 {% block content %}
 <main class="page page--detail" data-project-id="{{ project.project_id }}">
   <header class="detail-header">
-    <h1 class="detail-header__title">{{ project.project_id }} {{ project.project_name or "" }}</h1>
+    <h1 class="detail-header__title">{{ project.project_id }} {{ project.project_name or "" }}
+      <span class="platform-chip platform-chip--{{ project.platform }}">
+        {% if project.platform == "ios" %}📱 iOS{% else %}🤖 GP{% endif %}
+      </span>
+    </h1>
     <div class="detail-header__status">
       当前状态:
       {% with code=project.status, raw=project.status.value if project.status else None %}

@@ -46,6 +46,8 @@ class ProjectSummary:
     last_store_check_result: Optional[str] = None
     # 上线时间:PUBLISHED 时的 UTC 时间(管理界面展示)
     published_at: Optional[datetime] = None
+    # 平台派生:gp(Google Play) | ios(iOS App Store),由 project_id 推断
+    platform: str = "gp"
 
 
 class ProjectCache:
@@ -140,5 +142,6 @@ class ProjectCache:
                 last_store_check_at=p.last_store_check_at,
                 last_store_check_result=p.last_store_check_result,
                 published_at=p.published_at,
+                platform=p.platform,
             ))
         return out

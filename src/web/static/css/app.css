@@ -1269,3 +1269,25 @@ a.chip:hover {
 .sheet-table { width: 100%; border-collapse: collapse; background: var(--c-surface); border: 1px solid var(--c-border-soft); border-radius: var(--r-md); overflow: hidden; }
 .sheet-table th, .sheet-table td { padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--c-border-soft); text-align: left; }
 .sheet-table thead { background: var(--c-surface-2); }
+
+/* ===== Platform chip (gp | ios) =====
+ * 显示在 overview 表格的项目编号旁、project_detail 的标题旁。
+ * iOS 蓝色,GP 灰色;视觉上把两种平台在表里一眼区分。
+ */
+.platform-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-left: 6px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.platform-chip--ios {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+.platform-chip--gp {
+  background: #f1f3f4;
+  color: #5f6368;
+}

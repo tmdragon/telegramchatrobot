@@ -257,6 +257,9 @@
                 data-published-at="{{ s.published_at.isoformat() if s.published_at else '' }}">
               <td>
                 <a href="/project/{{ s.project_id }}" class="overview-row__id">{{ s.project_id }}</a>
+                <span class="platform-chip platform-chip--{{ s.platform }}">
+                  {% if s.platform == "ios" %}📱 iOS{% else %}🤖 GP{% endif %}
+                </span>
               </td>
               <td>
                 {% if s.project_name %}
