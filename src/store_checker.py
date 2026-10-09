@@ -45,6 +45,21 @@ _PAGE_TITLE_RE = re.compile(r'<title>([^<]+?) - Apps on Google Play</title>', re
 # 辅助：找 h1 标签（即使空）
 _H1_RE = re.compile(r'<h1[^>]*>', re.IGNORECASE)
 
+# iOS App Store URL → App Store ID 提取
+# 兼容 apps.apple.com/app/idN 与 apps.apple.com/cn/app/{slug}/idN
+# 容忍末尾 query / fragment
+_APP_STORE_ID_RE = re.compile(r"/id(\d+)(?:$|[/?#])")
+
+
+def extract_app_store_id(url: str) -> Optional[int]:
+    """从 iOS App Store URL 提取数字 App Store ID。无法提取时返回 None。"""
+    if not url:
+        return None
+    m = _APP_STORE_ID_RE.search(url)
+    if not m:
+        return None
+    return int(m.group(1))
+
 
 async def fetch_proxy_url(api_url: str, country: Optional[str] = None, timeout: float = 10.0) -> Optional[str]:
     """从代理池 API 获取一个代理 URL。
