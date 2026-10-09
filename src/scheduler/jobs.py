@@ -160,7 +160,7 @@ async def trigger_store_check_now(
     if not proj.store_url:
         return {"ok": False, "reason": "no_store_url"}
     result = await check_app_published(
-        proj.store_url, proxy=broadcast_cfg.store_monitor_proxy_url or None
+        proj.store_url, proj.platform, proxy=broadcast_cfg.store_monitor_proxy_url or None,
     )
     now = datetime.now(timezone.utc)
     proj.last_store_check_at = now
@@ -299,7 +299,8 @@ async def _store_monitor_wrapper(
             continue
         # 实际检查
         result = await check_app_published(
-            project.store_url, proxy=broadcast_cfg.store_monitor_proxy_url or None
+            project.store_url, project.platform,
+            proxy=broadcast_cfg.store_monitor_proxy_url or None,
         )
         # 写入 Project 字段（UI 会读到）
         project.last_store_check_at = now
@@ -386,7 +387,7 @@ async def _online_check_one(
             broadcast_cfg.online_check_proxy_api_url, country=country
         )
 
-    result = await check_app_published(url, proxy=proxy)
+    result = await check_app_published(url, project.platform, proxy=proxy)
     now = datetime.now(timezone.utc)
     project.last_online_check_at = now
 
