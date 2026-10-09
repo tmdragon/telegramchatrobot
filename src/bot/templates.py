@@ -139,7 +139,10 @@ def render_broadcast(
 ) -> str:
     name = project.project_name or "（未命名）"
     pkg = project.package_name or "—"
-    head = f"📊 *`{project.project_id}` {name}*"
+    # iOS 项目在标题前加 "[iOS] " 前缀;走 escape_markdown_v2 让 [ ] 转义,
+    # 否则 MarkdownV2 parser 会因 reserved 字符拒绝消息。
+    platform_prefix = escape_markdown_v2("[iOS] ") if project.platform == "ios" else ""
+    head = f"📊 *{platform_prefix}`{project.project_id}` {name}*"
     if exceeded_threshold:
         head += " ⚠"
     # 显示时区（用户在 cfg.display_timezone 配置，如 Asia/Shanghai）
