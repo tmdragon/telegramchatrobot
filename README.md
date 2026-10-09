@@ -12,6 +12,17 @@
 设计文档：[docs/superpowers/specs/2026-09-18-checkgprobot-design.md](docs/superpowers/specs/2026-09-18-checkgprobot-design.md)
 实施计划：[docs/superpowers/plans/2026-09-18-checkgprobot-phase1-data-layer.md](docs/superpowers/plans/2026-09-18-checkgprobot-phase1-data-layer.md)
 
+## 平台支持
+
+- **Google Play**：`project_id` 不含 "IOS" 子串 → 自动识别为 GP 项目
+- **iOS App Store**：`project_id` 含 "IOS" 子串（如 `PRJ-IOS-001`）→ 自动识别为 iOS 项目
+
+iOS 项目的"商店地址"列填写完整 App Store URL（如 `https://apps.apple.com/app/id1234567890`），系统通过 iTunes Search API 判断上架状态。
+
+平台支持可通过提交 commit history 追溯：
+- GP：HTML 启发式解析
+- iOS：`https://itunes.apple.com/lookup?id={N}`
+
 ## 安装
 
 ```bash

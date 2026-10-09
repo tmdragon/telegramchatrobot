@@ -86,3 +86,4 @@ src/
 ## Phase Status
 
 Tracked in [README.md](README.md). Current branch `phase3-bot` has Phase 1 (data) and Phase 2 (FastUI) complete; Phase 3 (bot + scheduler) is in progress — `bot/service.py`, `bot/commands.py`, `bot/templates.py` landed; `bot/broadcast.py`, `bot/notifications.py`, `src/scheduler/`, and FastAPI lifespan wiring are the remaining pieces (see `docs/superpowers/plans/2026-09-18-checkgprobot-phase3-bot-scheduler.md`).
+- **iOS 平台支持**（已完成于 commit 4eb8461）：`project_id` 含 "IOS" 子串的项目被识别为 iOS，走 iTunes Search API
