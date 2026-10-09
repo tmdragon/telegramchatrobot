@@ -366,7 +366,7 @@ async def _online_check_one(
     1. 根据 project.check_mode 决定代理来源
        - 'proxy':从 online_check_proxy_api_url 拉代理(可选 country)
        - 'direct':不走代理
-    2. 调 check_app_published(store_url, proxy=...)
+    2. 调 check_app_published(store_url, platform, proxy=...)
     3. published=True → 标记 online,清掉 pending 状态
     4. published=False:
        - 若还没在 pending,设 pending_since=now,attempts=1
