@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from src.models.status import StatusCode
 
@@ -61,6 +61,12 @@ class Project:
     last_online_check_result: Optional[str] = None  # 'online' | 'offline_pending' | 'offline_confirmed' | 'unknown'
     offline_pending_since: Optional[datetime] = None  # 首次检测到疑似下架的时间
     offline_pending_attempts: int = 0  # 连续失败次数,达上限才认定下架
+    # === 平台派生(project_id → gp / ios)===
+    platform: Literal["gp", "ios"] = "gp"
+
+    def __post_init__(self) -> None:
+        # platform 唯一真相源是 project_id(大小写敏感子串 "IOS" → ios)
+        self.platform = "ios" if "IOS" in self.project_id else "gp"
 
 
 @dataclass
