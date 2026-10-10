@@ -1,8 +1,21 @@
-{# 单个字段行。参数: field (Field), sheet (SheetView) #}
+{# 单个字段行。参数: field (Field), sheet (SheetView), 可选 gp_hash (dict) #}
 {# field_id 格式: {spreadsheet_id}::{sheet_name}::{row}::{col}
    第一段是 spreadsheet_id(给 gspread open_by_key 用),不是 sheet_name(否则 404) #}
 {% set field_id = sheet.spreadsheet_id ~ "::" ~ sheet.sheet_name ~ "::" ~ field.row_index ~ "::" ~ field.column_index %}
-{% set is_locked = field.recognized_as in ["project_id"] %}
+{# gp_packer-server 派生字段:用 sheet 列名(中英文别名都支持)匹配缓存字段 #}
+{% set is_hash_field = field.name in ["HASH", "hash", "签名 hash", "jks_sha256"] %}
+{% set is_main_act_field = field.name in ["主activity 的类名", "主activity类名", "主activity", "main_activity", "MainActivity", "LauncherActivity"] %}
+{% set is_derived = is_hash_field or is_main_act_field %}
+{% set display_value = field.value %}
+{% if is_derived and gp_hash %}
+  {% if is_hash_field and gp_hash.jks_sha256 %}
+    {% set display_value = gp_hash.jks_sha256 %}
+  {% elif is_main_act_field and gp_hash.main_activity %}
+    {% set display_value = gp_hash.main_activity %}
+  {% endif %}
+{% endif %}
+{# gp_packer 派生的字段不可内联编辑:值由 server 派生,避免 sheet 写脏后再被覆盖 #}
+{% set is_locked = field.recognized_as in ["project_id"] or is_derived %}
 <tr class="sheet-row"
     data-field-id="{{ field_id }}"
     data-original="{{ field.value }}">
@@ -10,7 +23,7 @@
   <td class="field-cell {% if is_locked %}field-cell--locked{% else %}field-cell--editable{% endif %}"
       {% if not is_locked %}data-editable="true"{% endif %}
       data-recognized-as="{{ field.recognized_as or '' }}">
-    <span class="field-cell__display">{{ field.value }}</span>
+    <span class="field-cell__display{% if is_derived %} hash-value{% endif %}">{{ display_value or "—" }}</span>
     {% if is_locked %}
       <span class="field-cell__lock-icon" aria-label="locked">🔒</span>
     {% endif %}
