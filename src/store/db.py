@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -65,6 +65,16 @@ CREATE TABLE IF NOT EXISTS project_state (
   status_changed_at   TEXT,
   payment_code        TEXT,
   payment_changed_at  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS gp_packer_hash (
+  project_id          TEXT PRIMARY KEY,
+  appid_canonical     TEXT,
+  jks_sha256          TEXT,
+  jks_size            INTEGER,
+  main_activity       TEXT,
+  fetched_at          TEXT,
+  last_error          TEXT
 );
 """
 
@@ -389,3 +399,53 @@ class Store:
                     )
                 else:
                     p.payment_changed_at = prev_pay_at
+
+    # ---------- gp-packer-server hash 缓存 ----------
+
+    def upsert_gp_packer_hash(
+        self,
+        project_id: str,
+        *,
+        appid_canonical: Optional[str] = None,
+        jks_sha256: Optional[str] = None,
+        jks_size: Optional[int] = None,
+        main_activity: Optional[str] = None,
+        fetched_at: Optional[datetime] = None,
+        last_error: Optional[str] = None,
+    ) -> None:
+        """写一行 gp_packer_hash 记录。成功/错误互斥:成功传 jks_sha256,失败传 last_error。
+
+        多次调用同 project_id 会覆盖。fetched_at 默认当前 UTC。
+        """
+        if fetched_at is None:
+            fetched_at = datetime.now(timezone.utc)
+        with self._conn() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO gp_packer_hash
+                   (project_id, appid_canonical, jks_sha256, jks_size,
+                    main_activity, fetched_at, last_error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    project_id,
+                    appid_canonical,
+                    jks_sha256,
+                    jks_size,
+                    main_activity,
+                    fetched_at.isoformat(),
+                    last_error,
+                ),
+            )
+            conn.commit()
+
+    def get_gp_packer_hash(self, project_id: str) -> Optional[dict]:
+        """读一行,失败返回 None。"""
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT project_id, appid_canonical, jks_sha256, jks_size,
+                          main_activity, fetched_at, last_error
+                   FROM gp_packer_hash WHERE project_id = ?""",
+                (project_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return dict(row)

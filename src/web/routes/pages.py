@@ -160,6 +160,10 @@ async def project_detail(request: Request, project_id: str):
         if last else None
     )
 
+    # gp-packer-server 缓存的 hash(可能 None)
+    store = app.state.store
+    gp_hash = store.get_gp_packer_hash(project_id) if store else None
+
     return templates.TemplateResponse(
         request=request, name="project_detail.html",
         context={
@@ -168,6 +172,7 @@ async def project_detail(request: Request, project_id: str):
             "dwell_seconds": dwell,
             "last_refresh_at": last.isoformat() if last else None,
             "last_refresh_human": last_human,
+            "gp_hash": gp_hash,
             "errors": [],
         },
     )

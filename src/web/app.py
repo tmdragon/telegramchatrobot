@@ -102,6 +102,7 @@ def create_app(
     app.state.cache = None  # T3 注入 ProjectCache
     app.state.broadcast_svc = None  # Phase 3 注入 BroadcastSvc
     app.state.broadcast_cfg = broadcast_cfg  # Phase 3 注入 BroadcastConfig(scheduler.yaml)
+    app.state.gp_packer_client = None  # main.py 注入 GpPackerClient;None = 未配置,API 返回 503
 
     # Jinja2 环境（autoescape 默认 on：.html/.xml/.htm；这里强制 on 更稳）
     templates = Jinja2Templates(directory=TEMPLATES_DIR)

@@ -95,6 +95,17 @@ def main(argv: list[str] | None = None) -> int:
     # Token 是占位符时不构造 BotService（让 lifespan 跳过 bot/scheduler，仅跑 UI）
     token = cfg.telegram_bot_token or ""
     bot_service = BotService() if (token and ":" in token and not token.startswith("REPLACE")) else None
+
+    # gp-packer-server client:env 里有 token 才构造（无 token 时路由层返回 503）
+    from src.gp_packer import GpPackerClient
+    gp_packer_client = (
+        GpPackerClient(base_url=cfg.gp_packer_base_url, token=cfg.gp_packer_token)
+        if cfg.gp_packer_token else None
+    )
+    if gp_packer_client:
+        print(f"[gp_packer] client ready → {cfg.gp_packer_base_url}")
+    else:
+        print("[gp_packer] no token configured; /api/projects/*/refresh-hash returns 503")
     scheduler_cfg_path = args.scheduler_config
     # 缺 scheduler.yaml 时回退默认配置（BroadcastConfig 自带 times/weekdays_only 默认）
     try:
@@ -136,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     app.state.broadcast_svc = broadcast_svc
     app.state.refresher = refresher  # 复用 scheduler 用的同一个实例
     app.state.scheduler_cfg = scheduler_cfg  # 商店监测手动触发用
+    app.state.gp_packer_client = gp_packer_client  # 项目 HASH 刷新用,None 表示未配置
 
     print(f"[ui] Listening on http://{cfg.ui_bind}:{cfg.ui_port}")
     print(f"[bot] token={cfg.telegram_bot_token[:6]}... admin={cfg.admin_chat_id}")

@@ -34,5 +34,74 @@
       </table>
     </section>
   {% endfor %}
+
+  {# gp-packer-server 签名 hash 缓存（独立区块，跟 sheet 解耦） #}
+  <section class="hash-section" data-project-id="{{ project.project_id }}">
+    <h2 class="hash-section__title">🔐 签名 Hash (gp-packer-server)</h2>
+    <div class="hash-section__body">
+      {% if gp_hash and gp_hash.jks_sha256 %}
+        <table class="sheet-table">
+          <tr>
+            <td class="field-cell__name">HASH (jks_sha256)</td>
+            <td class="field-cell"><code class="hash-value">{{ gp_hash.jks_sha256 }}</code></td>
+          </tr>
+          <tr>
+            <td class="field-cell__name">App ID (canonical)</td>
+            <td class="field-cell">{{ gp_hash.appid_canonical or "" }}</td>
+          </tr>
+          <tr>
+            <td class="field-cell__name">JKS 大小</td>
+            <td class="field-cell">{{ gp_hash.jks_size or "" }} bytes</td>
+          </tr>
+          <tr>
+            <td class="field-cell__name">Launcher Activity</td>
+            <td class="field-cell">{{ gp_hash.main_activity or "—" }}</td>
+          </tr>
+          <tr>
+            <td class="field-cell__name">获取时间</td>
+            <td class="field-cell">{{ gp_hash.fetched_at or "" }}</td>
+          </tr>
+        </table>
+      {% elif gp_hash and gp_hash.last_error %}
+        <div class="hash-section__error">⚠ 上次获取失败：{{ gp_hash.last_error }}</div>
+      {% else %}
+        <div class="hash-section__empty">未获取。点击下方"刷新"从 gp-packer-server 拉取。</div>
+      {% endif %}
+      <button class="hash-refresh-btn" data-project-id="{{ project.project_id }}">🔄 刷新</button>
+    </div>
+  </section>
 </main>
+
+<script>
+  // HASH 刷新按钮
+  (function () {
+    document.querySelectorAll('.hash-refresh-btn').forEach((btn) => {
+      btn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        const pid = btn.dataset.projectId;
+        if (!pid || btn.disabled) return;
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = '⏳ 刷新中…';
+        try {
+          const r = await fetch(`/api/projects/${encodeURIComponent(pid)}/refresh-hash`, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+          });
+          if (!r.ok) {
+            const data = await r.json().catch(() => ({}));
+            alert(`刷新失败：${data.detail || r.statusText}`);
+          } else {
+            location.reload();
+          }
+        } catch (e) {
+          alert(`网络错误：${e.message}`);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}

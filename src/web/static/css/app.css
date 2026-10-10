@@ -1291,3 +1291,14 @@ a.chip:hover {
   background: #f1f3f4;
   color: #5f6368;
 }
+
+/* === gp-packer hash section === */
+.hash-section { margin: var(--s-5) 0; }
+.hash-section__title { margin-bottom: var(--s-2); font-size: 15px; }
+.hash-section__body { display: flex; flex-direction: column; gap: var(--s-3); }
+.hash-section__empty { color: var(--c-text-muted); font-style: italic; padding: var(--s-2) 0; }
+.hash-section__error { color: #c62828; padding: var(--s-2) 0; }
+.hash-value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+.hash-refresh-btn { align-self: flex-start; padding: var(--s-1) var(--s-3); background: var(--c-surface-2); border: 1px solid var(--c-border-soft); border-radius: var(--r-md); cursor: pointer; }
+.hash-refresh-btn:hover { background: var(--c-surface-3, #e8eaed); }
+.hash-refresh-btn:disabled { opacity: 0.5; cursor: wait; }

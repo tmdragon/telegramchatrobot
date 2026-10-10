@@ -30,6 +30,10 @@ class AppConfig:
     spreadsheets: list[SpreadsheetConfig] = field(default_factory=list)
     # 播报 / UI 显示用的时区（IANA 名，如 "Asia/Shanghai"；默认 UTC）
     display_timezone: str = "UTC"
+    # gp-packer-server 配置：env 优先，未配置时 token/base_url 为空,
+    # main.py 检测到空 token 时不构造 GpPackerClient,路由层 503。
+    gp_packer_token: str = ""
+    gp_packer_base_url: str = "https://gp.theluckypatti.com"
 
     def get_spreadsheet_by_role(self, role: str) -> SpreadsheetConfig | None:
         """按 role 查 spreadsheet 配置;不存在返回 None。"""
@@ -131,5 +135,14 @@ def load_config(secrets_path: Path, sheets_path: Path) -> AppConfig:
         display_timezone=(
             _env("CHECKGPROBOT_DISPLAY_TIMEZONE")
             or secrets.get("display_timezone", "UTC")
+        ),
+        # gp-packer:env 优先,secrets.yaml 兑底
+        gp_packer_token=(
+            _env("CHECKGPROBOT_GP_PACKER_TOKEN")
+            or secrets.get("gp_packer_token", "")
+        ),
+        gp_packer_base_url=(
+            _env("CHECKGPROBOT_GP_PACKER_BASE_URL")
+            or secrets.get("gp_packer_base_url", "https://gp.theluckypatti.com")
         ),
     )

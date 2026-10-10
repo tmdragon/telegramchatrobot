@@ -328,6 +328,83 @@ async def post_online_recheck(project_id: str):
         raise HTTPException(status_code=500, detail=f"recheck failed: {e}")
 
 
+@router.get("/projects/{project_id}/hash")
+async def get_project_hash(request: Request, project_id: str):
+    """读项目在 gp-packer-server 上的 hash 缓存(无缓存返回 200 + null)。"""
+    store = request.app.state.store
+    row = store.get_gp_packer_hash(project_id)
+    if row is None:
+        return {"project_id": project_id, "cached": False}
+    return {"project_id": project_id, "cached": True, **row}
+
+
+@router.post("/projects/{project_id}/refresh-hash")
+async def post_refresh_hash(request: Request, project_id: str):
+    """从 gp-packer-server 取 hash 并缓存。project_id 大小写不敏感。
+
+    503 = gp-packer 未配置
+    404 = 项目不在 server 上(也可能是 token 没 grant)
+    502 = 网络/认证/限流
+    """
+    app = request.app
+    client = getattr(app.state, "gp_packer_client", None)
+    store = getattr(app.state, "store", None)
+    if client is None:
+        raise HTTPException(status_code=503, detail="gp-packer-server not configured")
+    if store is None:
+        raise HTTPException(status_code=503, detail="store not configured")
+
+    try:
+        canonical = await client.resolve_canonical_appid(project_id)
+        if canonical is None:
+            # 缓存"未找到"状态,UI 显示 "项目不在 server"
+            store.upsert_gp_packer_hash(
+                project_id, last_error="appid not found on server"
+            )
+            raise HTTPException(status_code=404, detail="appid not found on server")
+        info = await client.get_info(canonical)
+        store.upsert_gp_packer_hash(
+            project_id,
+            appid_canonical=canonical,
+            jks_sha256=info.get("jks_sha256"),
+            jks_size=info.get("jks_size"),
+            main_activity=info.get("main_activity"),
+        )
+        return {
+            "project_id": project_id,
+            "appid_canonical": canonical,
+            "jks_sha256": info.get("jks_sha256"),
+            "jks_size": info.get("jks_size"),
+            "main_activity": info.get("main_activity"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        # 4xx/5xx 之外的错误(包括 gp_packer 各种异常)→ 缓存 last_error
+        from src.gp_packer import (
+            GpPackerAuthError,
+            GpPackerError,
+            GpPackerNotFound,
+            GpPackerRateLimited,
+        )
+        if isinstance(e, GpPackerNotFound):
+            store.upsert_gp_packer_hash(project_id, last_error="not found")
+            raise HTTPException(status_code=404, detail="appid not found on server")
+        if isinstance(e, GpPackerAuthError):
+            store.upsert_gp_packer_hash(project_id, last_error=f"auth: {e.detail or e}")
+            raise HTTPException(status_code=502, detail=f"gp-packer auth error: {e.detail or e}")
+        if isinstance(e, GpPackerRateLimited):
+            store.upsert_gp_packer_hash(project_id, last_error="rate limited")
+            raise HTTPException(status_code=429, detail="gp-packer rate limit exceeded")
+        if isinstance(e, GpPackerError):
+            store.upsert_gp_packer_hash(project_id, last_error=str(e))
+            raise HTTPException(status_code=502, detail=f"gp-packer error: {e}")
+        # 未知错误(应该是不会到这里)
+        log.exception("unexpected error in refresh-hash (project=%s)", project_id)
+        store.upsert_gp_packer_hash(project_id, last_error=f"unexpected: {e}")
+        raise HTTPException(status_code=500, detail=f"refresh-hash failed: {e}")
+
+
 @router.get("/statuses")
 async def get_statuses():
     """返回所有合法状态选项(用于项目详情页"状态"列的内联编辑下拉框)。
