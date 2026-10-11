@@ -363,19 +363,61 @@ async def post_refresh_hash(request: Request, project_id: str):
             )
             raise HTTPException(status_code=404, detail="appid not found on server")
         info = await client.get_info(canonical)
+        sha = info.get("jks_sha256")
+        main_act = info.get("main_activity")
         store.upsert_gp_packer_hash(
             project_id,
             appid_canonical=canonical,
-            jks_sha256=info.get("jks_sha256"),
+            jks_sha256=sha,
             jks_size=info.get("jks_size"),
-            main_activity=info.get("main_activity"),
+            main_activity=main_act,
         )
+
+        # 把 hash / main_activity 回写到 sheet 的对应列(让 /info 命令也能读到)
+        # + 同时更新 cache in-place,避免 /info 还要等下一次 background refresh
+        cache = getattr(app.state, "cache", None)
+        proj = cache.get(project_id) if cache else None
+        if proj and (sha or main_act):
+            for sv in proj.sheets:
+                for f in sv.fields:
+                    if f.recognized_as == "hash_value" and sha:
+                        f.value = sha
+                    elif f.recognized_as == "class_name" and main_act:
+                        f.value = main_act
+            # 写回 sheet(下次 refresh 自然会看到;失败不影响 SQLite 缓存)
+            refresher = getattr(app.state, "refresher", None)
+            if refresher is not None:
+                import asyncio
+                for recognized_as, new_val in (("hash_value", sha), ("class_name", main_act)):
+                    if not new_val:
+                        continue
+                    field = next(
+                        (f for sv in proj.sheets for f in sv.fields if f.recognized_as == recognized_as),
+                        None,
+                    )
+                    if field is None:
+                        continue
+                    try:
+                        await asyncio.to_thread(
+                            refresher.sheet_repo.update_cell_by_header,
+                            spreadsheet_id=refresher.cfg.spreadsheets[0].id,
+                            worksheet_name=refresher.cfg.spreadsheets[0].name,
+                            row=field.row_index,
+                            header_name=field.name,
+                            new_value=new_val,
+                        )
+                    except Exception:  # noqa: BLE001
+                        log.exception(
+                            "gp_packer: failed to write %s back to sheet for %s (cache 已更新)",
+                            recognized_as, project_id,
+                        )
+
         return {
             "project_id": project_id,
             "appid_canonical": canonical,
-            "jks_sha256": info.get("jks_sha256"),
+            "jks_sha256": sha,
             "jks_size": info.get("jks_size"),
-            "main_activity": info.get("main_activity"),
+            "main_activity": main_act,
         }
     except HTTPException:
         raise

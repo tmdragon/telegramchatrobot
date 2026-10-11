@@ -189,3 +189,98 @@ async def test_refresh_hash_502_on_generic_gp_packer_error():
     r = TestClient(app).post("/api/projects/k1-001/refresh-hash")
     assert r.status_code == 502
     store.upsert_gp_packer_hash.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_refresh_hash_writes_back_to_sheet_and_cache():
+    """成功后:cache in-place 改 + sheet 写回(让 /info 立刻读到)。"""
+    from src.models.project import Project, Field, SheetView
+
+    client = mock.MagicMock(spec=GpPackerClient)
+    client.resolve_canonical_appid = mock.AsyncMock(return_value="K1-001")
+    client.get_info = mock.AsyncMock(return_value={
+        "appid": "K1-001",
+        "jks_sha256": "newhash123",
+        "jks_size": 2200,
+        "main_activity": "com.example.NewActivity",
+    })
+    store = mock.MagicMock()
+    sheet_repo = mock.MagicMock()
+    refresher = mock.MagicMock()
+    refresher.sheet_repo = sheet_repo
+    refresher.cfg.spreadsheets = [mock.MagicMock(id="ss1", name="S1")]
+
+    # 构造 cache 里的 project(有空 hash_value 和 class_name fields)
+    proj = Project(
+        project_id="k1-001",
+        project_name="Test",
+        package_name="com.x",
+        store_url="https://x",
+        status=mock.MagicMock(value="PUBLISHED"),
+        status_raw="已发布",
+        sheets=[SheetView(
+            spreadsheet_id="ss1",
+            sheet_name="S1",
+            fields=[
+                Field(name="hash值", value="", column_index=10, row_index=2, recognized_as="hash_value"),
+                Field(name="主activity 的类名", value="", column_index=11, row_index=2, recognized_as="class_name"),
+            ],
+            fetched_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        )],
+    )
+    cache = mock.MagicMock()
+    cache.get.return_value = proj
+
+    app = _make_app(client=client, store=store)
+    app.state.cache = cache
+    app.state.refresher = refresher
+    # 实跑 sync 函数(避免 async to_thread 嵌套 mock 复杂度):直接断言 update_cell_by_header 被同步调用
+    r = TestClient(app).post("/api/projects/k1-001/refresh-hash")
+    assert r.status_code == 200
+
+    # cache in-place 改值
+    fields_by_key = {f.recognized_as: f for sv in proj.sheets for f in sv.fields}
+    assert fields_by_key["hash_value"].value == "newhash123"
+    assert fields_by_key["class_name"].value == "com.example.NewActivity"
+
+    # sheet 写回 2 次(hash + class_name)
+    assert sheet_repo.update_cell_by_header.call_count == 2
+    hash_call = next(c for c in sheet_repo.update_cell_by_header.call_args_list
+                     if c.kwargs.get("header_name") == "hash值")
+    main_call = next(c for c in sheet_repo.update_cell_by_header.call_args_list
+                     if c.kwargs.get("header_name") == "主activity 的类名")
+    assert hash_call.kwargs["new_value"] == "newhash123"
+    assert main_call.kwargs["new_value"] == "com.example.NewActivity"
+
+
+@pytest.mark.asyncio
+async def test_refresh_hash_sheet_write_failure_does_not_fail_request():
+    """sheet 写回失败(网络/权限) → 不影响 200,仅 log 错误。"""
+    client = mock.MagicMock(spec=GpPackerClient)
+    client.resolve_canonical_appid = mock.AsyncMock(return_value="K1-001")
+    client.get_info = mock.AsyncMock(return_value={
+        "jks_sha256": "abc", "main_activity": "com.x", "jks_size": 1,
+    })
+    store = mock.MagicMock()
+    sheet_repo = mock.MagicMock()
+    sheet_repo.update_cell_by_header.side_effect = Exception("gspread timeout")
+    refresher = mock.MagicMock()
+    refresher.sheet_repo = sheet_repo
+    refresher.cfg.spreadsheets = [mock.MagicMock(id="ss1", name="S1")]
+
+    from src.models.project import Project, Field, SheetView
+    proj = Project(project_id="k1-001", sheets=[SheetView(
+        spreadsheet_id="ss1", sheet_name="S1",
+        fields=[Field(name="hash值", value="", column_index=10, row_index=2, recognized_as="hash_value")],
+        fetched_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+    )])
+    cache = mock.MagicMock()
+    cache.get.return_value = proj
+
+    app = _make_app(client=client, store=store)
+    app.state.cache = cache
+    app.state.refresher = refresher
+    r = TestClient(app).post("/api/projects/k1-001/refresh-hash")
+    assert r.status_code == 200  # 200 而非 500
+    # SQLite 缓存还是有的
+    store.upsert_gp_packer_hash.assert_called_once()
