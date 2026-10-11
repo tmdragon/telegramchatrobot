@@ -363,10 +363,10 @@ async def post_refresh_hash(request: Request, project_id: str):
             )
             raise HTTPException(status_code=404, detail="appid not found on server")
         info = await client.get_info(canonical)
-        # user 期望的"hash"是 properties 文本里的 hashKey 字段,不是 jks_sha256
+        # user 期望的"hash"是 properties 文本里的 keyhash 字段(base64),不是 jks_sha256
         from src.gp_packer import parse_properties
         props = parse_properties(info.get("properties", ""))
-        hash_key = props.get("hashKey")
+        hash_key = props.get("keyhash") or props.get("hashKey")  # keyhash 优先,旧字段名兜底
         sha = info.get("jks_sha256")
         main_act = info.get("main_activity")
         store.upsert_gp_packer_hash(
