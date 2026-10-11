@@ -17,6 +17,7 @@ from src.gp_packer import (
     GpPackerError,
     GpPackerNotFound,
     GpPackerRateLimited,
+    parse_properties,
 )
 
 
@@ -274,3 +275,31 @@ async def test_appid_cache_ttl_expiry():
     get_calls = [c.args[0] for c in client_mock.get.call_args_list]
     keys_calls = [u for u in get_calls if "/keys/" in u]
     assert len(keys_calls) == 2  # 每次都重新拉
+
+
+# ---------- parse_properties ----------
+
+def test_parse_properties_basic():
+    text = "sign.enabled=true\nsign.keystore.file=demo.jks\nhashKey=abc123\n"
+    p = parse_properties(text)
+    assert p["sign.enabled"] == "true"
+    assert p["sign.keystore.file"] == "demo.jks"
+    assert p["hashKey"] == "abc123"
+
+
+def test_parse_properties_empty():
+    assert parse_properties("") == {}
+
+
+def test_parse_properties_with_blank_lines_and_comments():
+    text = "# 注释行\n\nkey1=val1\n\n# 另一个注释\nkey2=val2\n"
+    p = parse_properties(text)
+    assert p == {"key1": "val1", "key2": "val2"}
+
+
+def test_parse_properties_value_with_equals():
+    """值里可以有 = (configparser 默认按第一个 = 切)。"""
+    text = "key1=a=b=c\nkey2=simple\n"
+    p = parse_properties(text)
+    assert p["key1"] == "a=b=c"
+    assert p["key2"] == "simple"

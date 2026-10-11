@@ -8,8 +8,8 @@
 {% set is_derived = is_hash_field or is_main_act_field %}
 {% set display_value = field.value %}
 {% if is_derived and gp_hash %}
-  {% if is_hash_field and gp_hash.jks_sha256 %}
-    {% set display_value = gp_hash.jks_sha256 %}
+  {% if is_hash_field and gp_hash.hash_key %}
+    {% set display_value = gp_hash.hash_key %}
   {% elif is_main_act_field and gp_hash.main_activity %}
     {% set display_value = gp_hash.main_activity %}
   {% endif %}

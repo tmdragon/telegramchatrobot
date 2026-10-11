@@ -93,21 +93,45 @@ async def test_refresh_hash_success_stores_and_returns():
         "jks_size": 2139,
         "jks_sha256": "abc123def456",
         "main_activity": "com.example.M",
-        "properties": "...",
+        "properties": "sign.enabled=true\nsign.keystore.file=demo.jks\nhashKey=USER_WANTS_THIS\n",
     })
     store = mock.MagicMock()
     app = _make_app(client=client, store=store)
     r = TestClient(app).post("/api/projects/k1-001/refresh-hash")
     assert r.status_code == 200
     body = r.json()
-    assert body["jks_sha256"] == "abc123def456"
+    assert body["hash_key"] == "USER_WANTS_THIS"  # 从 properties 解析
+    assert body["jks_sha256"] == "abc123def456"     # API 原字段保留
     assert body["appid_canonical"] == "K1-001"
     # store.upsert_gp_packer_hash 应该被调一次,带正确的 hash
     store.upsert_gp_packer_hash.assert_called_once()
     args, kwargs = store.upsert_gp_packer_hash.call_args
     assert args[0] == "k1-001"  # project_id 是位置参数
+    assert kwargs["hash_key"] == "USER_WANTS_THIS"
     assert kwargs["jks_sha256"] == "abc123def456"
     assert kwargs["appid_canonical"] == "K1-001"
+
+
+@pytest.mark.asyncio
+async def test_refresh_hash_falls_back_gracefully_when_hashkey_missing():
+    """properties 里没 hashKey → hash_key=None,API 仍 200 成功(只是没值)。"""
+    client = mock.MagicMock(spec=GpPackerClient)
+    client.resolve_canonical_appid = mock.AsyncMock(return_value="K1-001")
+    client.get_info = mock.AsyncMock(return_value={
+        "appid": "K1-001",
+        "jks_sha256": "abc",
+        "main_activity": "x",
+        "properties": "sign.enabled=true\n",  # 无 hashKey
+    })
+    store = mock.MagicMock()
+    app = _make_app(client=client, store=store)
+    r = TestClient(app).post("/api/projects/k1-001/refresh-hash")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["hash_key"] is None
+    # store 仍然被调,只是 hash_key=None
+    store.upsert_gp_packer_hash.assert_called_once()
+    assert store.upsert_gp_packer_hash.call_args.kwargs["hash_key"] is None
 
 
 @pytest.mark.asyncio
@@ -203,6 +227,7 @@ async def test_refresh_hash_writes_back_to_sheet_and_cache():
         "jks_sha256": "newhash123",
         "jks_size": 2200,
         "main_activity": "com.example.NewActivity",
+        "properties": "hashKey=USER_HASH_KEY_123\n",
     })
     store = mock.MagicMock()
     sheet_repo = mock.MagicMock()
@@ -238,9 +263,9 @@ async def test_refresh_hash_writes_back_to_sheet_and_cache():
     r = TestClient(app).post("/api/projects/k1-001/refresh-hash")
     assert r.status_code == 200
 
-    # cache in-place 改值
+    # cache in-place 改值(hashKey 来自 properties,主activity 来自 API 字段)
     fields_by_key = {f.recognized_as: f for sv in proj.sheets for f in sv.fields}
-    assert fields_by_key["hash_value"].value == "newhash123"
+    assert fields_by_key["hash_value"].value == "USER_HASH_KEY_123"  # 来自 properties.hashKey
     assert fields_by_key["class_name"].value == "com.example.NewActivity"
 
     # sheet 写回 2 次(hash + class_name)
@@ -249,7 +274,7 @@ async def test_refresh_hash_writes_back_to_sheet_and_cache():
                      if c.kwargs.get("header_name") == "hash值")
     main_call = next(c for c in sheet_repo.update_cell_by_header.call_args_list
                      if c.kwargs.get("header_name") == "主activity 的类名")
-    assert hash_call.kwargs["new_value"] == "newhash123"
+    assert hash_call.kwargs["new_value"] == "USER_HASH_KEY_123"
     assert main_call.kwargs["new_value"] == "com.example.NewActivity"
 
 

@@ -363,6 +363,10 @@ async def post_refresh_hash(request: Request, project_id: str):
             )
             raise HTTPException(status_code=404, detail="appid not found on server")
         info = await client.get_info(canonical)
+        # user 期望的"hash"是 properties 文本里的 hashKey 字段,不是 jks_sha256
+        from src.gp_packer import parse_properties
+        props = parse_properties(info.get("properties", ""))
+        hash_key = props.get("hashKey")
         sha = info.get("jks_sha256")
         main_act = info.get("main_activity")
         store.upsert_gp_packer_hash(
@@ -371,24 +375,25 @@ async def post_refresh_hash(request: Request, project_id: str):
             jks_sha256=sha,
             jks_size=info.get("jks_size"),
             main_activity=main_act,
+            hash_key=hash_key,
         )
 
         # 把 hash / main_activity 回写到 sheet 的对应列(让 /info 命令也能读到)
         # + 同时更新 cache in-place,避免 /info 还要等下一次 background refresh
         cache = getattr(app.state, "cache", None)
         proj = cache.get(project_id) if cache else None
-        if proj and (sha or main_act):
+        if proj and (hash_key or main_act):
             for sv in proj.sheets:
                 for f in sv.fields:
-                    if f.recognized_as == "hash_value" and sha:
-                        f.value = sha
+                    if f.recognized_as == "hash_value" and hash_key:
+                        f.value = hash_key
                     elif f.recognized_as == "class_name" and main_act:
                         f.value = main_act
             # 写回 sheet(下次 refresh 自然会看到;失败不影响 SQLite 缓存)
             refresher = getattr(app.state, "refresher", None)
             if refresher is not None:
                 import asyncio
-                for recognized_as, new_val in (("hash_value", sha), ("class_name", main_act)):
+                for recognized_as, new_val in (("hash_value", hash_key), ("class_name", main_act)):
                     if not new_val:
                         continue
                     field = next(
@@ -415,6 +420,7 @@ async def post_refresh_hash(request: Request, project_id: str):
         return {
             "project_id": project_id,
             "appid_canonical": canonical,
+            "hash_key": hash_key,
             "jks_sha256": sha,
             "jks_size": info.get("jks_size"),
             "main_activity": main_act,

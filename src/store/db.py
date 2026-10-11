@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS gp_packer_hash (
   jks_sha256          TEXT,
   jks_size            INTEGER,
   main_activity       TEXT,
+  hash_key            TEXT,
   fetched_at          TEXT,
   last_error          TEXT
 );
@@ -94,6 +95,7 @@ class Store:
             # 兼容老库：补齐缺失列（CREATE TABLE IF NOT EXISTS 不会加列）
             self._ensure_column(conn, "project_state", "payment_code", "TEXT")
             self._ensure_column(conn, "project_state", "payment_changed_at", "TEXT")
+            self._ensure_column(conn, "gp_packer_hash", "hash_key", "TEXT")
             conn.commit()
 
     def _ensure_column(self, conn, table: str, col: str, decl: str) -> None:
@@ -410,10 +412,11 @@ class Store:
         jks_sha256: Optional[str] = None,
         jks_size: Optional[int] = None,
         main_activity: Optional[str] = None,
+        hash_key: Optional[str] = None,
         fetched_at: Optional[datetime] = None,
         last_error: Optional[str] = None,
     ) -> None:
-        """写一行 gp_packer_hash 记录。成功/错误互斥:成功传 jks_sha256,失败传 last_error。
+        """写一行 gp_packer_hash 记录。成功/错误互斥:成功传 jks_sha256+hash_key,失败传 last_error。
 
         多次调用同 project_id 会覆盖。fetched_at 默认当前 UTC。
         """
@@ -423,14 +426,15 @@ class Store:
             conn.execute(
                 """INSERT OR REPLACE INTO gp_packer_hash
                    (project_id, appid_canonical, jks_sha256, jks_size,
-                    main_activity, fetched_at, last_error)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    main_activity, hash_key, fetched_at, last_error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     project_id,
                     appid_canonical,
                     jks_sha256,
                     jks_size,
                     main_activity,
+                    hash_key,
                     fetched_at.isoformat(),
                     last_error,
                 ),
@@ -442,7 +446,7 @@ class Store:
         with self._conn() as conn:
             row = conn.execute(
                 """SELECT project_id, appid_canonical, jks_sha256, jks_size,
-                          main_activity, fetched_at, last_error
+                          main_activity, hash_key, fetched_at, last_error
                    FROM gp_packer_hash WHERE project_id = ?""",
                 (project_id,),
             ).fetchone()

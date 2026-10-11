@@ -5,6 +5,7 @@
 - get_info(appid) - 拿 /info（jks_sha256 等）
 - resolve_canonical_appid(project_id) - 大小写不敏感地把 project_id 解析为
   server 上的 appid（用 5min TTL 缓存）
+- parse_properties(text) - 解析 Java .properties 文本为 dict（用于读 hashKey 等字段）
 
 错误层级：
 - GpPackerError 通用
@@ -14,6 +15,7 @@
 """
 from __future__ import annotations
 
+import configparser
 import time
 from typing import Optional
 
@@ -159,3 +161,24 @@ class GpPackerClient:
         """强制下次 resolve_canonical_appid 重新拉。测试用。"""
         self._appid_cache = {}
         self._appid_cache_ts = 0.0
+
+
+def parse_properties(text: str) -> dict[str, str]:
+    """解析 Java .properties 文本为 dict。空文本返回 {}。
+
+    gp-packer /info 返回的 properties 字段是 verbatim 文件内容,UTF-8,
+    \\n 分隔多行,格式是 `key=value`(无 [section] header)。
+
+    configparser 需要 [section] header 且默认把 key 转小写(optionxform),
+    这里手动改 optionxform 保留原始大小写(.properties 文件的 key 是大小写敏感的)。
+    """
+    if not text:
+        return {}
+    parser = configparser.ConfigParser()
+    # 保留原始 key 大小写(默认会 lowercase → "hashKey" 变 "hashkey" 取不到)
+    parser.optionxform = str
+    try:
+        parser.read_string("[default]\n" + text)
+    except configparser.Error:
+        return {}
+    return {k: v for k, v in parser["default"].items()}
