@@ -11,6 +11,7 @@ build_scheduler：根据 broadcast_cfg.refresh_interval_minutes 切换模式：
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 from datetime import datetime, timedelta, timezone
 
@@ -24,6 +25,9 @@ from src.scheduler.config import BroadcastConfig
 from src.store_checker import check_app_published, fetch_proxy_url
 from src.web.cache import ProjectCache
 from src.web.refresher import BackgroundRefresher
+
+
+log = logging.getLogger(__name__)
 
 
 def _parse_hhmm(s: str) -> tuple[int, int]:
@@ -164,7 +168,14 @@ async def trigger_store_check_now(
     )
     now = datetime.now(timezone.utc)
     proj.last_store_check_at = now
-    proj.last_store_check_result = "published" if result["published"] else "pending"
+    reason = result.get("reason") or ""
+    if result["published"]:
+        proj.last_store_check_result = "published"
+    elif reason.startswith("error"):
+        # URL 错、解析失败等 → UI 显示 reason 而不是误导的 "pending"
+        proj.last_store_check_result = reason
+    else:
+        proj.last_store_check_result = "pending"
 
     if result["published"]:
         # 上架了！与定时任务同步：写 sheet + refresh + 提醒
@@ -200,7 +211,11 @@ async def trigger_store_check_now(
                         refreshed, trigger=BroadcastTrigger.STATUS_CHANGE,
                     )
                 except Exception:  # noqa: BLE001
-                    pass
+                    log.exception(
+                        "store_monitor: broadcast to customer groups failed for %s after publish "
+                        "(sheet was updated, manual re-broadcast may be needed)",
+                        project_id,
+                    )
                 proj = refreshed  # 后面引用 project_name/status 时也用新值
             await broadcast_svc.broadcast_internal_only_with_text(
                 f"✅ 商店上架监测: {project_id} ({proj.project_name or '（未命名）'}) "
@@ -224,6 +239,8 @@ async def trigger_store_check_now(
         next_at = now + timedelta(seconds=broadcast_cfg.store_monitor_min_hours * 3600)
         proj.next_store_check_at = next_at
         refresher.store_check_schedule[project_id] = next_at
+        if reason:
+            log.info("store_monitor: %s not yet published: %s", project_id, reason)
         return {
             "ok": True, "published": False, "title": result.get("title"),
             "reason": result.get("reason"),
@@ -304,7 +321,16 @@ async def _store_monitor_wrapper(
         )
         # 写入 Project 字段（UI 会读到）
         project.last_store_check_at = now
-        project.last_store_check_result = "published" if result["published"] else "pending"
+        reason = result.get("reason") or ""
+        if result["published"]:
+            project.last_store_check_result = "published"
+        elif reason.startswith("error"):
+            # URL 错、解析失败等 → UI 显示 reason 而不是误导的 "pending"
+            project.last_store_check_result = reason
+        else:
+            project.last_store_check_result = "pending"
+        if not result["published"] and reason:
+            log.info("store_monitor: %s not yet published: %s", project.project_id, reason)
         if result["published"]:
             try:
                 row = refresher._find_project_row(project.project_id)
@@ -336,7 +362,11 @@ async def _store_monitor_wrapper(
                             refreshed, trigger=BroadcastTrigger.STATUS_CHANGE,
                         )
                     except Exception:  # noqa: BLE001
-                        pass
+                        log.exception(
+                            "store_monitor: broadcast to customer groups failed for %s after publish "
+                            "(sheet was updated, manual re-broadcast may be needed)",
+                            project.project_id,
+                        )
                 await broadcast_svc.broadcast_internal_only_with_text(
                     f"✅ 商店上架监测: {project.project_id} ({project.project_name or '（未命名）'}) "
                     f"已从 SECOND_REVIEW → PUBLISHED。检测到：{result.get('title') or '?'}"
