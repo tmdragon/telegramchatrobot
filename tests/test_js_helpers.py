@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -70,3 +71,51 @@ def test_api_error_shape(static_dir):
     js = (static_dir / "js/api.js").read_text(encoding="utf-8")
     assert "class ApiError" in js
     assert "status" in js and "message" in js and "detail" in js
+
+
+# --- 模块内私有 helper 调用完整性 ---------------------------------------
+#
+# 回归测试：groups.js 的 _openEditModal() 调用了 _openModal()，但该函数的
+# function 定义在某个重构 commit 里被删掉了 —— 页面点击「编辑」抛
+# ReferenceError，又被委托处的 try/catch 吞掉，表现为「按钮点了没反应」。
+# ES module 里没有全局兜底，所以静态扫描即可提前发现这类漏网之鱼。
+
+_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+_DEFINITION_RES = (
+    re.compile(r"^\s*(?:async\s+)?function\s+_(\w+)", re.M),
+    re.compile(r"^\s*(?:const|let|var)\s+_(\w+)\s*=", re.M),
+)
+
+
+def _strip_comments(js: str) -> str:
+    return _COMMENT_RE.sub("", js)
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "groups.js",
+        "mappings-crud.js",
+        "broadcast-all.js",
+        "edit-projects.js",
+        "new-project.js",
+        "confirm-dialog.js",
+        "inline-edit.js",
+        "online.js",
+        "settings.js",
+    ],
+)
+def test_private_helpers_are_defined(static_dir, filename):
+    """模块内调用的 `_helper(...)` 必须在本模块有定义或被 import。"""
+    js = (static_dir / "js" / filename).read_text(encoding="utf-8")
+    code = _strip_comments(js)
+
+    defined = set()
+    for rx in _DEFINITION_RES:
+        defined.update(rx.findall(code))
+    for m in re.finditer(r"import\s*\{([^}]*)\}", code):
+        defined.update(n.strip().split(" as ")[-1].strip() for n in m.group(1).split(","))
+
+    called = set(re.findall(r"(?<![\w.$])_(\w+)\s*\(", code))
+    missing = sorted(n for n in called if n not in defined)
+    assert not missing, f"{filename} 调用了未定义的 helper: {['_' + n for n in missing]}"

@@ -20,6 +20,12 @@ import {
 import { filterSelectOptions, wireSearchInput } from "./select-filter.js";
 import { initBroadcastModal } from "./broadcast-all.js";
 
+function _openModal(modal) {
+  modal.hidden = false;
+  modal.removeAttribute("hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
 function _openNewGroupModal(modal, form) {
   // 简化版:任何步骤失败都尝试把 modal 打开
   try { _clearError(form); } catch (e) { console.warn("clearError", e); }
@@ -28,10 +34,7 @@ function _openNewGroupModal(modal, form) {
   if (select) {
     try { filterSelectOptions(select, ""); } catch (e) { console.warn("filterSelectOptions", e); }
   }
-  // 直接显示 modal,不依赖 _openModal
-  modal.hidden = false;
-  modal.removeAttribute("hidden");
-  modal.setAttribute("aria-hidden", "false");
+  _openModal(modal);
   // focus chat_id
   const chatInput = form.querySelector("#ng-chat-id");
   if (chatInput) {
