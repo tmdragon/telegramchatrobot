@@ -180,88 +180,67 @@ class MappingRepo:
         for row_idx in rows:
             ws.update_cell(row_idx, 4, "FALSE")
 
-    def set_mapping_enabled(self, project_id: str, enabled: bool) -> bool:
-        """设置单条 mapping(按 project_id)的 enabled。找不到返回 False。"""
-        ws = self._ws()
-        row_idx = self._find_row(ws, project_id)
-        if row_idx is None:
-            return False
-        ws.update_cell(row_idx, 4, "TRUE" if enabled else "FALSE")
-        return True
-
     @staticmethod
     def _norm(s: str) -> str:
         """归一化用于比较:去首尾空格 + 忽略大小写。"""
         return (s or "").strip().casefold()
 
-    def _find_rows_by_mapping(self, ws, chat_id: str, project_id: str) -> list[int]:
-        """返回 (项目编号, chat_id) 同时匹配的行号(1-indexed,不含表头)。
+    def _group_rows(
+        self, rows: list[list[str]], chat_id: str
+    ) -> list[tuple[int, str, str, bool]]:
+        """挑出某个群在表里的行:(行号, 项目编号, 备注, 是否启用)。
 
-        不用 ws.find():它是「整表行优先的首个精确匹配」,既不限列也不限行,
-        同一个项目出现在多个群时会定位到别的群的行 —— 移除/启用就写错了地方,
-        本群那一行原封不动,前端看着像"移除没生效"。找不到还只是静默返回 None。
-
-        这里逐行精确比对 (项目编号, chat_id),并容忍单元格里的空格/大小写差异
-        (load_all 会 strip,find 不会)。
+        项目编号为空 = 「纯群映射」行(群本身存在,但没关联项目)。
+        行号是 1-indexed 的表内行号(第 1 行是表头)。
         """
-        rows = ws.get_all_values()
-        want_pid = self._norm(project_id)
         want_chat = self._norm(chat_id)
-        out: list[int] = []
+        out: list[tuple[int, str, str, bool]] = []
         for idx, row in enumerate(rows[1:], start=2):
-            if len(row) < 2:
+            if len(row) < 2 or self._norm(row[1]) != want_chat:
                 continue
-            if (self._norm(row[0]) == want_pid
-                    and self._norm(row[1]) == want_chat):
-                out.append(idx)
+            pid = row[0].strip() if len(row) > 0 else ""
+            note = row[2].strip() if len(row) > 2 else ""
+            enabled = _truthy(row[3]) if len(row) > 3 else False
+            out.append((idx, pid, note, enabled))
         return out
 
-    def set_mapping_enabled_in_group(
-        self, chat_id: str, project_id: str, enabled: bool
-    ) -> int:
-        """按 (chat_id, project_id) 精确设置 enabled,返回改动的行数。"""
-        ws = self._ws()
-        rows = self._find_rows_by_mapping(ws, chat_id, project_id)
-        if not rows:
-            log.warning(
-                "mapping row not found (chat_id=%s, project_id=%s) — 跳过 enabled 更新",
-                chat_id, project_id,
-            )
-            return 0
-        for row_idx in rows:
-            ws.update_cell(row_idx, 4, "TRUE" if enabled else "FALSE")
-        return len(rows)
-
     def set_group_projects(self, chat_id: str, project_ids: list[str]) -> None:
-        """同步该 chat_id 下 enabled 的 mappings 成给定 project_ids 集合。
+        """把该 chat_id 下的映射行同步成给定 project_ids 集合。
 
-        - desired - current_enabled:创建新 mapping(或重新启用已存在的)
-        - current_enabled - desired:把 enabled 设为 FALSE(软删除,保留 sheet 行)
-        - 已 disabled 但在 desired:重新启用
+        - 项目号不在 desired 里的行:**直接删行**(不是把 enabled 改 FALSE)
+        - desired 里没有对应行的:追加新行(备注/启用状态跟群现有行一致)
+        - 已有行的 enabled **不动** —— 群级「启用/停用」由 update_group 统一管;
+          否则「取消勾选启用再保存」会被这里重新启用,群永远停用不掉
+
+        行号按 ws.get_all_values() 的 1-indexed 表内行号算,删行会让下面的行
+        往上顶,所以删多行时必须倒序删。
         """
         desired = [p.strip() for p in project_ids if p and p.strip()]
         desired_norm = {self._norm(p) for p in desired}
-        mappings = self.load_all()
-        # 该 chat_id 下所有 mappings(含 disabled)
-        all_for_chat = [m for m in mappings if m.chat_id == chat_id and m.project_id]
-        current_enabled = {self._norm(m.project_id) for m in all_for_chat if m.enabled}
+        ws = self._ws()
 
-        # 添加:desired 里有但当前 enabled 没有
-        for pid in desired:
-            if self._norm(pid) in current_enabled:
-                continue
-            existing = next(
-                (m for m in all_for_chat if self._norm(m.project_id) == self._norm(pid)),
-                None,
+        # 1) 删掉不在 desired 里的项目行 —— 倒序,否则行号会错位
+        rows = ws.get_all_values()
+        stale = [
+            idx for idx, pid, _note, _en in self._group_rows(rows, chat_id)
+            if pid and self._norm(pid) not in desired_norm
+        ]
+        for idx in sorted(stale, reverse=True):
+            ws.delete_rows(idx)
+        if stale:
+            log.info(
+                "groups: 删除 chat_id=%s 的映射行 %s", chat_id, stale
             )
-            if existing is not None:
-                # 重新启用(保留 history)——必须精确到本群那一行
-                self.set_mapping_enabled_in_group(chat_id, existing.project_id, True)
-            else:
-                # 创建新 mapping(chat_id 已存在;用底层 append 跳过守卫)
-                self._append_mapping(chat_id, project_id=pid, note="", enabled=True)
 
-        # 移除:当前 enabled 但不在 desired → 软删除(精确到本群那一行)
-        for m in all_for_chat:
-            if m.enabled and self._norm(m.project_id) not in desired_norm:
-                self.set_mapping_enabled_in_group(chat_id, m.project_id, False)
+        # 2) 补齐 desired 里缺的行
+        rows = ws.get_all_values()
+        group_rows = self._group_rows(rows, chat_id)
+        have = {self._norm(pid) for _idx, pid, _note, _en in group_rows if pid}
+        group_note = next((n for _i, _p, n, _e in group_rows if n), "")
+        group_enabled = any(en for _i, _p, _n, en in group_rows) if group_rows else True
+        for pid in desired:
+            if self._norm(pid) in have:
+                continue
+            self._append_mapping(
+                chat_id, project_id=pid, note=group_note, enabled=group_enabled
+            )

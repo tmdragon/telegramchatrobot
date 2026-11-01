@@ -28,6 +28,7 @@ class _FakeWorksheet:
     def __init__(self, headers, rows):
         self.title = "项目群映射"
         self._rows = [list(headers)] + [list(r) for r in rows]
+        self.deleted_rows: list[int] = []  # 记录删行的顺序/行号
 
     def get_all_values(self):
         return [list(r) for r in self._rows]
@@ -51,6 +52,13 @@ class _FakeWorksheet:
         while len(target) < col:
             target.append("")
         target[col - 1] = value
+
+    def delete_rows(self, start_index, end_index=None):
+        """删行(1-indexed,含首尾)。和 gspread 一样:删完下面的行会往上顶。"""
+        self.deleted_rows.append(start_index)
+        if end_index is None:
+            end_index = start_index
+        del self._rows[start_index - 1:end_index]
 
     def append_row(self, row_data, **kwargs):
         self._rows.append(list(row_data))
@@ -354,14 +362,26 @@ def test_set_group_projects_adds_and_removes():
     assert args[1] == "-1001"
 
 
-# ---------- 移除项目必须落在「本群」那一行 ----------
+# ---------- 移除项目 = 真正删掉映射行 ----------
 
-def test_set_group_projects_disables_only_this_chats_row():
-    """同一个项目在两个群各有一行时,移除只应停用本群那一行。
+def test_set_group_projects_deletes_row_instead_of_disabling():
+    """移除项目 = 删掉那一行,不是把 enabled 改成 FALSE。"""
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "TRUE", ""],
+        ["PRJ-002", "-1001", "一群", "TRUE", ""],
+    ])
+    repo = _make_fake_repo(ws)
 
-    之前用 ws.find(project_id)(整表首个精确匹配)定位行,会写到别的群的行上:
-    本群的行原封不动 → 前端看着像"移除没生效"。
-    """
+    repo.set_group_projects("-1001", project_ids=["PRJ-002"])
+
+    rows = ws.get_all_values()
+    assert len(rows) == 2, "PRJ-001 那一行应该被删掉"
+    assert rows[1][0] == "PRJ-002"
+    assert rows[1][3] == "TRUE"
+
+
+def test_set_group_projects_deletes_only_this_chats_row():
+    """同一个项目在两个群各有一行时,移除只删本群那一行。"""
     ws = _FakeWorksheet(HEADERS, [
         ["PRJ-001", "-1001", "一群", "TRUE", ""],
         ["PRJ-001", "-1002", "二群", "TRUE", ""],
@@ -371,12 +391,13 @@ def test_set_group_projects_disables_only_this_chats_row():
     repo.set_group_projects("-1002", project_ids=[])
 
     rows = ws.get_all_values()
-    assert rows[2][3] == "FALSE", "本群(-1002)那一行应被停用"
-    assert rows[1][3] == "TRUE", "别的群(-1001)的行不应被误改"
+    assert len(rows) == 2
+    assert rows[1][0] == "PRJ-001"
+    assert rows[1][1] == "-1001", "别的群的行不该被动"
 
 
 def test_set_group_projects_removes_project_with_padded_cell():
-    """sheet 单元格里的项目编号带尾随空格时也要能停用。
+    """sheet 单元格里的项目编号带尾随空格时也要能删掉。
 
     load_all() 会 strip,所以群页面上看到的是干净的 "PRJ-001";
     但 ws.find("PRJ-001") 是精确匹配,带空格就找不到 → 静默不写 → 移除没生效。
@@ -388,26 +409,86 @@ def test_set_group_projects_removes_project_with_padded_cell():
 
     repo.set_group_projects("-1001", project_ids=[])
 
-    assert ws.get_all_values()[1][3] == "FALSE"
+    assert len(ws.get_all_values()) == 1, "只剩表头"
 
 
-def test_set_group_projects_reenables_this_chats_row():
-    """重新关联已停用的项目时,启用的应该是本群那一行。"""
+def test_set_group_projects_deletes_rows_in_descending_order():
+    """删多行必须倒序 —— 删一行会把下面的行顶上来,正序删会删错行。"""
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "TRUE", ""],
+        ["PRJ-002", "-1001", "一群", "TRUE", ""],
+        ["PRJ-003", "-1001", "一群", "TRUE", ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1001", project_ids=[])
+
+    assert ws.deleted_rows == [4, 3, 2], "必须倒序删"
+    assert len(ws.get_all_values()) == 1
+
+
+def test_set_group_projects_removes_whole_group_when_last_project_goes():
+    """群里最后一个项目被移除 → 这个群的行全没了(群也一起消失)。"""
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "TRUE", ""],
+        ["PRJ-002", "-1002", "二群", "TRUE", ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1001", project_ids=[])
+
+    rows = ws.get_all_values()
+    assert len(rows) == 2
+    assert rows[1][1] == "-1002", "只剩另一个群"
+
+
+def test_set_group_projects_appends_row_for_new_project():
+    """desired 里有但表里没有的项目 → 追加新行,备注/启用跟群一致。"""
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "TRUE", ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1001", project_ids=["PRJ-001", "PRJ-002"])
+
+    rows = ws.get_all_values()
+    assert len(rows) == 3
+    assert rows[2][0] == "PRJ-002"
+    assert rows[2][1] == "-1001"
+    assert rows[2][2] == "一群", "新行备注跟着群"
+    assert rows[2][3] == "TRUE"
+
+
+def test_set_group_projects_new_row_follows_disabled_group():
+    """群整体停用时新增的项目 → 新行也停用。"""
     ws = _FakeWorksheet(HEADERS, [
         ["PRJ-001", "-1001", "一群", "FALSE", ""],
-        ["PRJ-001", "-1002", "二群", "TRUE",  ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1001", project_ids=["PRJ-001", "PRJ-002"])
+
+    assert ws.get_all_values()[2][3] == "FALSE"
+
+
+def test_set_group_projects_does_not_reenable_existing_rows():
+    """已有行的 enabled 不动 —— 群级「停用」不能被项目同步重新启用。
+
+    取消勾选「启用」保存时,update_group 会把群里所有行置 FALSE;
+    紧接着的 set_group_projects 如果再把 desired 里的行启用,群就永远停用不掉。
+    """
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "FALSE", ""],
     ])
     repo = _make_fake_repo(ws)
 
     repo.set_group_projects("-1001", project_ids=["PRJ-001"])
 
-    rows = ws.get_all_values()
-    assert rows[1][3] == "TRUE", "本群(-1001)那一行应被启用"
-    assert rows[2][3] == "TRUE", "别的群(-1002)的行不应被误改"
+    assert ws.get_all_values()[1][3] == "FALSE"
 
 
 def test_set_group_projects_does_not_duplicate_row_when_re_adding():
-    """同一项目在本群停用后再加回来,应该重新启用而不是追加重复行。"""
+    """同一项目在本群停用后再加回来,不应该追加重复行。"""
     ws = _FakeWorksheet(HEADERS, [
         ["PRJ-001", "-1001", "一群", "FALSE", ""],
     ])
@@ -416,4 +497,3 @@ def test_set_group_projects_does_not_duplicate_row_when_re_adding():
     repo.set_group_projects("-1001", project_ids=["PRJ-001"])
 
     assert len(ws.get_all_values()) == 2, "不应该追加新行"
-    assert ws.get_all_values()[1][3] == "TRUE"

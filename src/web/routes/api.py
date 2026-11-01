@@ -1136,10 +1136,11 @@ async def delete_groups_manage(request: Request, chat_id: str):
 
 @router.put("/groups/manage/{chat_id}/projects")
 async def put_groups_manage_projects(request: Request, chat_id: str, body: UpdateGroupProjectsBody):
-    """同步该 chat_id 下 enabled 的 mappings 成给定 project_ids 集合。
+    """同步该 chat_id 下的映射行成给定 project_ids 集合。
 
-    - desired 里有但当前 enabled 没有:创建或重新启用
-    - 当前 enabled 但不在 desired:软删除(enabled=false,保留 sheet 行)
+    - 项目号不在集合里:删掉那一行(真删,不是改 enabled)
+    - 集合里没有的行:追加新行
+    - 已有行的 enabled 不动(群级启用/停用由 PUT /groups/manage/{chat_id} 管)
     """
     app = request.app
     mapping_repo = app.state.mapping_repo
