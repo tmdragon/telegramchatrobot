@@ -165,6 +165,22 @@ async def test_refresh_hash_404_when_project_not_on_server():
 
 
 @pytest.mark.asyncio
+async def test_refresh_hash_404_lists_tried_appids():
+    """404 文案带上尝试过的 key(完整名 + 括号前基础名),便于定位问题。"""
+    client = mock.MagicMock(spec=GpPackerClient)
+    client.resolve_canonical_appid = mock.AsyncMock(return_value=None)
+    store = mock.MagicMock()
+    app = _make_app(client=client, store=store)
+    r = TestClient(app).post("/api/projects/TTR-0680(6514b)/refresh-hash")
+    assert r.status_code == 404
+    detail = r.json()["detail"]
+    assert "tried" in detail
+    assert "TTR-0680(6514b)" in detail
+    assert "TTR-0680" in detail
+    assert "tried" in (store.upsert_gp_packer_hash.call_args.kwargs.get("last_error") or "")
+
+
+@pytest.mark.asyncio
 async def test_refresh_hash_404_when_gp_packer_raises_not_found():
     """client.get_info 抛 GpPackerNotFound(罕见,resolve_canonical 通常先返回 None)→ 404。"""
     client = mock.MagicMock(spec=GpPackerClient)

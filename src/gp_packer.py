@@ -4,7 +4,9 @@
 - list_appids() - 拿全量 appid 列表
 - get_info(appid) - 拿 /info（jks_sha256 等）
 - resolve_canonical_appid(project_id) - 大小写不敏感地把 project_id 解析为
-  server 上的 appid（用 5min TTL 缓存）
+  server 上的 appid（用 5min TTL 缓存）；三级匹配：完整名 → 括号前基础名 → 前缀
+- strip_paren_suffix(project_id) - 截掉括号后缀,取基础名（TTR-0680(6514b) → TTR-0680）
+- appid_candidates(project_id) - 按尝试顺序列出查找键（用于错误文案）
 - parse_properties(text) - 解析 Java .properties 文本为 dict（用于读 hashKey 等字段）
 
 错误层级：
@@ -149,11 +151,40 @@ class GpPackerClient:
     async def resolve_canonical_appid(self, project_id: str) -> Optional[str]:
         """大小写不敏感地把 project_id 解析为 server 上的 appid。
 
+        三级匹配:
+        1. 完整 project_id 精确匹配(项目名与 server 完全一致时走这条)
+        2. 括号前基础名精确匹配(TTR-0680(6514b) → TTR-0680)
+        3. 基础名前缀匹配(TTR-0680( → TTR-0680(6541B))
+
+        第 2/3 级是因为 sheet 里的项目名与 server 上的 appid 括号后缀可能不同
+        (例:sheet 是 TTR-0680(6514b),server 是 TTR-0680(6541B))。
+
         返回 None 表示:project 不在 server(或 token 没 grant 覆盖)。
         区分 "项目不在" vs "网络/认证失败":通过外层捕获 GpPackerError。
         """
         m = await self._ensure_appid_cache()
-        return m.get(project_id.lower())
+        # 1/2 级:完整名 + 括号前基础名,精确匹配
+        for key in appid_candidates(project_id):
+            hit = m.get(key.lower())
+            if hit is not None:
+                return hit
+        base = strip_paren_suffix(project_id)
+        if base == project_id:
+            return None
+        # 3 级:前缀匹配 base + "(" / base + "（"
+        prefixes = (base.lower() + "(", base.lower() + "（")
+        matches = [
+            a for a in m.values()
+            if a.lower().startswith(prefixes[0]) or a.lower().startswith(prefixes[1])
+        ]
+        if not matches:
+            return None
+        # 多个候选时优先选括号后缀与项目名一致的那个(项目名理论上唯一,这是兜底)
+        want = _paren_suffix(project_id)
+        for a in matches:
+            if _paren_suffix(a) == want:
+                return a
+        return matches[0]
 
     # ---------- 测试/调试辅助 ----------
 
@@ -161,6 +192,53 @@ class GpPackerClient:
         """强制下次 resolve_canonical_appid 重新拉。测试用。"""
         self._appid_cache = {}
         self._appid_cache_ts = 0.0
+
+
+# ---------- 项目名 → 查找键 ----------
+
+# 左括号:半角 + 全角
+_PAREN_OPENERS = ("(", "（")
+
+
+def strip_paren_suffix(project_id: str) -> str:
+    """截掉第一个左括号及其之后的内容,返回基础名。
+
+    sheet 里的项目名可能带构建后缀(如 TTR-0680(6514b)),而 server 上的 appid
+    后缀可能不同(如 TTR-0680(6541B))或干脆没有括号 —— 基础名才是稳定的查找键。
+
+    没有左括号、或左括号前没有可用内容时,原样返回。
+    """
+    positions = [i for i in (project_id.find(c) for c in _PAREN_OPENERS) if i != -1]
+    if not positions:
+        return project_id
+    base = project_id[:min(positions)].strip()
+    return base or project_id
+
+
+def appid_candidates(project_id: str) -> list[str]:
+    """按尝试顺序返回查找键:完整 project_id → 括号前基础名。
+
+    用于错误文案(告诉用户试过哪些 key)。
+    """
+    candidates = [project_id]
+    base = strip_paren_suffix(project_id)
+    if base != project_id:
+        candidates.append(base)
+    return candidates
+
+
+def _paren_suffix(text: str) -> str:
+    """取第一对括号内的内容(小写)。没有括号返回 ""。"""
+    positions = [(text.find(c), c) for c in _PAREN_OPENERS]
+    positions = [(i, c) for i, c in positions if i != -1]
+    if not positions:
+        return ""
+    start, opener = min(positions)
+    closer = ")" if opener == "(" else "）"
+    end = text.find(closer, start + 1)
+    if end == -1:
+        end = len(text)
+    return text[start + 1:end].strip().lower()
 
 
 def parse_properties(text: str) -> dict[str, str]:

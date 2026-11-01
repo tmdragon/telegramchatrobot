@@ -358,10 +358,13 @@ async def post_refresh_hash(request: Request, project_id: str):
         canonical = await client.resolve_canonical_appid(project_id)
         if canonical is None:
             # 缓存"未找到"状态,UI 显示 "项目不在 server"
-            store.upsert_gp_packer_hash(
-                project_id, last_error="appid not found on server"
+            # 文案带上试过的 key(完整名 + 括号前基础名),便于定位括号后缀问题
+            from src.gp_packer import appid_candidates
+            detail = "appid not found on server (tried: {})".format(
+                ", ".join(appid_candidates(project_id))
             )
-            raise HTTPException(status_code=404, detail="appid not found on server")
+            store.upsert_gp_packer_hash(project_id, last_error=detail)
+            raise HTTPException(status_code=404, detail=detail)
         info = await client.get_info(canonical)
         # user 期望的"hash"是 properties 文本里的 keyhash 字段(base64),不是 jks_sha256
         from src.gp_packer import parse_properties

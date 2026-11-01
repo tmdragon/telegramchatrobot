@@ -17,7 +17,9 @@ from src.gp_packer import (
     GpPackerError,
     GpPackerNotFound,
     GpPackerRateLimited,
+    appid_candidates,
     parse_properties,
+    strip_paren_suffix,
 )
 
 
@@ -275,6 +277,100 @@ async def test_appid_cache_ttl_expiry():
     get_calls = [c.args[0] for c in client_mock.get.call_args_list]
     keys_calls = [u for u in get_calls if "/keys/" in u]
     assert len(keys_calls) == 2  # 每次都重新拉
+
+
+# ---------- 括号后缀截取 ----------
+
+def test_strip_paren_suffix_returns_base_name():
+    """TTR-0680(6514b) → TTR-0680。"""
+    assert strip_paren_suffix("TTR-0680(6514b)") == "TTR-0680"
+
+
+def test_strip_paren_suffix_keeps_name_without_parens():
+    assert strip_paren_suffix("TTR-0680") == "TTR-0680"
+
+
+def test_strip_paren_suffix_handles_fullwidth_parens():
+    assert strip_paren_suffix("TTR-0680（6514b）") == "TTR-0680"
+
+
+def test_strip_paren_suffix_trims_whitespace_before_paren():
+    assert strip_paren_suffix("TTR-0680 (6514b)") == "TTR-0680"
+
+
+def test_strip_paren_suffix_cuts_at_first_paren_only():
+    assert strip_paren_suffix("A(B(C))") == "A"
+
+
+def test_strip_paren_suffix_keeps_name_when_no_usable_base():
+    """括号在开头 → 没有可用基础名,原样返回。"""
+    assert strip_paren_suffix("(6514b)") == "(6514b)"
+
+
+def test_appid_candidates_lists_full_name_then_base():
+    assert appid_candidates("TTR-0680(6514b)") == ["TTR-0680(6514b)", "TTR-0680"]
+
+
+def test_appid_candidates_single_entry_without_parens():
+    assert appid_candidates("TTR-0680") == ["TTR-0680"]
+
+
+# ---------- 三级匹配(精确 → 基础名 → 前缀) ----------
+
+@pytest.mark.asyncio
+async def test_resolve_falls_back_to_base_name():
+    """server 只有 TTR-0680 → TTR-0680(6514b) 应解析到 TTR-0680。"""
+    with mock.patch("src.gp_packer.httpx.AsyncClient", return_value=_fake_client({"appids": ["TTR-0680", "demo"]})):
+        c = GpPackerClient("https://x", "tok")
+        assert await c.resolve_canonical_appid("TTR-0680(6514b)") == "TTR-0680"
+
+
+@pytest.mark.asyncio
+async def test_resolve_falls_back_to_prefix_match():
+    """server 只有 TTR-0680(6541B) → TTR-0680(6514b) 应解析到 TTR-0680(6541B)。"""
+    with mock.patch("src.gp_packer.httpx.AsyncClient", return_value=_fake_client({"appids": ["TTR-0680(6541B)", "demo"]})):
+        c = GpPackerClient("https://x", "tok")
+        assert await c.resolve_canonical_appid("TTR-0680(6514b)") == "TTR-0680(6541B)"
+
+
+@pytest.mark.asyncio
+async def test_resolve_prefers_exact_full_match_over_base():
+    """完整名精确命中时,不该退到基础名。"""
+    with mock.patch("src.gp_packer.httpx.AsyncClient", return_value=_fake_client({"appids": ["TTR-0680(6541B)", "TTR-0680"]})):
+        c = GpPackerClient("https://x", "tok")
+        assert await c.resolve_canonical_appid("TTR-0680(6541B)") == "TTR-0680(6541B)"
+
+
+@pytest.mark.asyncio
+async def test_resolve_prefers_base_exact_over_prefix():
+    """基础名精确命中优先于前缀匹配。"""
+    with mock.patch("src.gp_packer.httpx.AsyncClient", return_value=_fake_client({"appids": ["TTR-0680", "TTR-0680(6541B)"]})):
+        c = GpPackerClient("https://x", "tok")
+        assert await c.resolve_canonical_appid("TTR-0680(6514b)") == "TTR-0680"
+
+
+@pytest.mark.asyncio
+async def test_resolve_prefix_picks_entry_with_matching_suffix():
+    """多个同前缀候选时,优先选括号后缀与项目名一致的那个。"""
+    appids = ["TTR-0680(6541B)", "TTR-0680(6514B)"]
+    with mock.patch("src.gp_packer.httpx.AsyncClient", return_value=_fake_client({"appids": appids})):
+        c = GpPackerClient("https://x", "tok")
+        assert await c.resolve_canonical_appid("TTR-0680(6514b)") == "TTR-0680(6514B)"
+
+
+@pytest.mark.asyncio
+async def test_resolve_prefix_does_not_match_other_projects():
+    """前缀匹配不能跨项目:TTR-0680( 的候选不该命中 TTR-0680-2(...)。"""
+    with mock.patch("src.gp_packer.httpx.AsyncClient", return_value=_fake_client({"appids": ["TTR-0680-2(6541B)"]})):
+        c = GpPackerClient("https://x", "tok")
+        assert await c.resolve_canonical_appid("TTR-0680(6514b)") is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_returns_none_when_no_candidate_matches():
+    with mock.patch("src.gp_packer.httpx.AsyncClient", return_value=_fake_client({"appids": ["OTHER-001"]})):
+        c = GpPackerClient("https://x", "tok")
+        assert await c.resolve_canonical_appid("TTR-0680(6514b)") is None
 
 
 # ---------- parse_properties ----------
