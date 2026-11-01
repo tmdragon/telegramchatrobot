@@ -2,6 +2,65 @@ from unittest.mock import MagicMock
 from src.models.project import Mapping
 from src.sheets.mapping_repo import MappingRepo
 
+HEADERS = ["项目编号", "群 chat_id", "备注", "是否启用", "上次播报时间"]
+
+
+class _FakeCell:
+    def __init__(self, row, col, value):
+        self.row = row
+        self.col = col
+        self.value = value
+
+
+class _FakeWorksheet:
+    """模拟 gspread.Worksheet 的关键行为(与 gspread 6.x 一致)。
+
+    - find(query):整表按行优先扫描,**精确**匹配(大小写敏感),返回首个命中单元格;
+      找不到返回 None。这是 gspread 的真实语义 —— 不是"包含",也不限定列。
+    - get_all_values():当前表内容
+    - update_cell(row, col, value):1-indexed 写入,落到内存表(便于断言最终状态)
+    - append_row(row):追加到末尾
+
+    之前的测试用 MagicMock 把 find() 固定成"总能找对行",恰好掩盖了
+    "整表首个匹配"定位到别的行的坑。
+    """
+
+    def __init__(self, headers, rows):
+        self.title = "项目群映射"
+        self._rows = [list(headers)] + [list(r) for r in rows]
+
+    def get_all_values(self):
+        return [list(r) for r in self._rows]
+
+    def find(self, query, in_row=None, in_column=None, case_sensitive=True):
+        for ri, row in enumerate(self._rows, start=1):
+            for ci, val in enumerate(row, start=1):
+                text = "" if val is None else str(val)
+                if case_sensitive:
+                    hit = text == query
+                else:
+                    hit = text.casefold() == query.casefold()
+                if hit:
+                    return _FakeCell(ri, ci, text)
+        return None
+
+    def update_cell(self, row, col, value):
+        while len(self._rows) < row:
+            self._rows.append([])
+        target = self._rows[row - 1]
+        while len(target) < col:
+            target.append("")
+        target[col - 1] = value
+
+    def append_row(self, row_data, **kwargs):
+        self._rows.append(list(row_data))
+
+
+def _make_fake_repo(ws):
+    client = MagicMock()
+    client.open.return_value.worksheet.return_value = ws
+    return MappingRepo(client)
+
 
 def _make_ws(headers: list[str], rows: list[list]):
     ws = MagicMock()
@@ -293,3 +352,68 @@ def test_set_group_projects_adds_and_removes():
     args = fake_ws.append_row.call_args[0][0]
     assert args[0] == "PRJ-003"
     assert args[1] == "-1001"
+
+
+# ---------- 移除项目必须落在「本群」那一行 ----------
+
+def test_set_group_projects_disables_only_this_chats_row():
+    """同一个项目在两个群各有一行时,移除只应停用本群那一行。
+
+    之前用 ws.find(project_id)(整表首个精确匹配)定位行,会写到别的群的行上:
+    本群的行原封不动 → 前端看着像"移除没生效"。
+    """
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "TRUE", ""],
+        ["PRJ-001", "-1002", "二群", "TRUE", ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1002", project_ids=[])
+
+    rows = ws.get_all_values()
+    assert rows[2][3] == "FALSE", "本群(-1002)那一行应被停用"
+    assert rows[1][3] == "TRUE", "别的群(-1001)的行不应被误改"
+
+
+def test_set_group_projects_removes_project_with_padded_cell():
+    """sheet 单元格里的项目编号带尾随空格时也要能停用。
+
+    load_all() 会 strip,所以群页面上看到的是干净的 "PRJ-001";
+    但 ws.find("PRJ-001") 是精确匹配,带空格就找不到 → 静默不写 → 移除没生效。
+    """
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001 ", "-1001", "一群", "TRUE", ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1001", project_ids=[])
+
+    assert ws.get_all_values()[1][3] == "FALSE"
+
+
+def test_set_group_projects_reenables_this_chats_row():
+    """重新关联已停用的项目时,启用的应该是本群那一行。"""
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "FALSE", ""],
+        ["PRJ-001", "-1002", "二群", "TRUE",  ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1001", project_ids=["PRJ-001"])
+
+    rows = ws.get_all_values()
+    assert rows[1][3] == "TRUE", "本群(-1001)那一行应被启用"
+    assert rows[2][3] == "TRUE", "别的群(-1002)的行不应被误改"
+
+
+def test_set_group_projects_does_not_duplicate_row_when_re_adding():
+    """同一项目在本群停用后再加回来,应该重新启用而不是追加重复行。"""
+    ws = _FakeWorksheet(HEADERS, [
+        ["PRJ-001", "-1001", "一群", "FALSE", ""],
+    ])
+    repo = _make_fake_repo(ws)
+
+    repo.set_group_projects("-1001", project_ids=["PRJ-001"])
+
+    assert len(ws.get_all_values()) == 2, "不应该追加新行"
+    assert ws.get_all_values()[1][3] == "TRUE"

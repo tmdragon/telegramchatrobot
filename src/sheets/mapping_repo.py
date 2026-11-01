@@ -5,12 +5,14 @@
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 import gspread
 
 from src.models.project import Mapping
 
+log = logging.getLogger(__name__)
 
 HEADERS = ["项目编号", "群 chat_id", "备注", "是否启用", "上次播报时间"]
 
@@ -187,6 +189,49 @@ class MappingRepo:
         ws.update_cell(row_idx, 4, "TRUE" if enabled else "FALSE")
         return True
 
+    @staticmethod
+    def _norm(s: str) -> str:
+        """归一化用于比较:去首尾空格 + 忽略大小写。"""
+        return (s or "").strip().casefold()
+
+    def _find_rows_by_mapping(self, ws, chat_id: str, project_id: str) -> list[int]:
+        """返回 (项目编号, chat_id) 同时匹配的行号(1-indexed,不含表头)。
+
+        不用 ws.find():它是「整表行优先的首个精确匹配」,既不限列也不限行,
+        同一个项目出现在多个群时会定位到别的群的行 —— 移除/启用就写错了地方,
+        本群那一行原封不动,前端看着像"移除没生效"。找不到还只是静默返回 None。
+
+        这里逐行精确比对 (项目编号, chat_id),并容忍单元格里的空格/大小写差异
+        (load_all 会 strip,find 不会)。
+        """
+        rows = ws.get_all_values()
+        want_pid = self._norm(project_id)
+        want_chat = self._norm(chat_id)
+        out: list[int] = []
+        for idx, row in enumerate(rows[1:], start=2):
+            if len(row) < 2:
+                continue
+            if (self._norm(row[0]) == want_pid
+                    and self._norm(row[1]) == want_chat):
+                out.append(idx)
+        return out
+
+    def set_mapping_enabled_in_group(
+        self, chat_id: str, project_id: str, enabled: bool
+    ) -> int:
+        """按 (chat_id, project_id) 精确设置 enabled,返回改动的行数。"""
+        ws = self._ws()
+        rows = self._find_rows_by_mapping(ws, chat_id, project_id)
+        if not rows:
+            log.warning(
+                "mapping row not found (chat_id=%s, project_id=%s) — 跳过 enabled 更新",
+                chat_id, project_id,
+            )
+            return 0
+        for row_idx in rows:
+            ws.update_cell(row_idx, 4, "TRUE" if enabled else "FALSE")
+        return len(rows)
+
     def set_group_projects(self, chat_id: str, project_ids: list[str]) -> None:
         """同步该 chat_id 下 enabled 的 mappings 成给定 project_ids 集合。
 
@@ -194,23 +239,29 @@ class MappingRepo:
         - current_enabled - desired:把 enabled 设为 FALSE(软删除,保留 sheet 行)
         - 已 disabled 但在 desired:重新启用
         """
-        desired = set(p for p in project_ids if p)  # 过滤空字符串
+        desired = [p.strip() for p in project_ids if p and p.strip()]
+        desired_norm = {self._norm(p) for p in desired}
         mappings = self.load_all()
         # 该 chat_id 下所有 mappings(含 disabled)
         all_for_chat = [m for m in mappings if m.chat_id == chat_id and m.project_id]
-        current_enabled = {m.project_id for m in all_for_chat if m.enabled}
+        current_enabled = {self._norm(m.project_id) for m in all_for_chat if m.enabled}
 
         # 添加:desired 里有但当前 enabled 没有
-        for pid in desired - current_enabled:
-            existing = next((m for m in all_for_chat if m.project_id == pid), None)
+        for pid in desired:
+            if self._norm(pid) in current_enabled:
+                continue
+            existing = next(
+                (m for m in all_for_chat if self._norm(m.project_id) == self._norm(pid)),
+                None,
+            )
             if existing is not None:
-                # 重新启用(保留 history)
-                self.set_mapping_enabled(pid, True)
+                # 重新启用(保留 history)——必须精确到本群那一行
+                self.set_mapping_enabled_in_group(chat_id, existing.project_id, True)
             else:
                 # 创建新 mapping(chat_id 已存在;用底层 append 跳过守卫)
                 self._append_mapping(chat_id, project_id=pid, note="", enabled=True)
 
-        # 移除:当前 enabled 但不在 desired → 软删除
+        # 移除:当前 enabled 但不在 desired → 软删除(精确到本群那一行)
         for m in all_for_chat:
-            if m.enabled and m.project_id not in desired:
-                self.set_mapping_enabled(m.project_id, False)
+            if m.enabled and self._norm(m.project_id) not in desired_norm:
+                self.set_mapping_enabled_in_group(chat_id, m.project_id, False)
