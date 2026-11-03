@@ -466,8 +466,8 @@ async def get_statuses():
     - aliases: 所有合法中文/英文别名(用户填到 sheet 的字符串,
       由 normalize_status 识别为该 code)
 
-    前端用这些构建 <optgroup>,用户选哪个字符串就 PUT 哪个,服务端
-    normalize 时识别回对应 code。
+    前端每个状态只渲染一个选项(display),aliases 仅用于识别"当前 cell
+    的原文属于哪个状态",不让别名把下拉框撑成几十行。
     """
     from src.models.status import StatusCode, ALIASES
     from src.bot.templates import STATUS_DISPLAY_CN
