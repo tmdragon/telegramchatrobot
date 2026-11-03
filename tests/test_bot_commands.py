@@ -407,15 +407,13 @@ def _projects_cache(*projects: Project) -> ProjectCache:
 
 
 def _customer_ctx(cache: ProjectCache, chat_id: int = -100123):
-    """客户群 context：只映射 PAK-001 / PAK-002。"""
+    """客户群 context：cache 里所有项目都映射到该群。"""
     mapping_repo = MagicMock()
     mapping_repo.load_all = MagicMock(return_value=[
-        Mapping(project_id="PAK-001", chat_id=str(chat_id), note="",
+        Mapping(project_id=p.project_id, chat_id=str(chat_id), note="",
                 enabled=True, last_broadcast_at=None,
-                last_broadcast_status=None, last_error=None),
-        Mapping(project_id="PAK-002", chat_id=str(chat_id), note="",
-                enabled=True, last_broadcast_at=None,
-                last_broadcast_status=None, last_error=None),
+                last_broadcast_status=None, last_error=None)
+        for p in cache.list_projects()
     ])
     c = _make_context()
     c.bot_data = {
@@ -493,6 +491,164 @@ async def test_projects_cmd_marks_settled_and_unsettled_together():
     assert "PAK-002" in text
     assert "已结算" in text
     assert "未结算" in text
+
+
+# ---------- /projects 分组表格 ----------
+
+def _dwidth(text: str) -> int:
+    """显示宽度：全角/中文算 2 列。测试用独立实现，不复用被测代码。"""
+    import unicodedata
+    total = 0
+    for ch in text:
+        if unicodedata.combining(ch):
+            continue
+        total += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return total
+
+
+def _code_block_lines(text: str) -> list[str]:
+    """取出 ``` 代码块里的行（去掉围栏）。"""
+    lines: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        if line.strip() == "```":
+            inside = not inside
+            continue
+        if inside:
+            lines.append(line)
+    return lines
+
+
+def _field_starts(line: str) -> list[int]:
+    """每个字段的起始显示列（字段以 2 个以上空格分隔）。"""
+    import re
+    starts: list[int] = []
+    for m in re.finditer(r"\S+(?: \S+)*", line):
+        starts.append(_dwidth(line[:m.start()]))
+    return starts
+
+
+async def test_projects_cmd_renders_grouped_code_block_table():
+    """每个状态组一个等宽代码块表格"""
+    cache = _projects_cache(
+        Project(
+            project_id="PAK-001", project_name="项目一",
+            package_name="com.example.pkg1",
+            status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+            payment_status=PaymentStatus.PAID,
+        ),
+        Project(
+            project_id="PAK-002", project_name="项目二",
+            package_name="com.example.pkg2",
+            status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+            payment_status=PaymentStatus.UNPAID,
+        ),
+    )
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    assert text.count("```") == 2  # 一个状态组 → 一对围栏
+    table = _code_block_lines(text)
+    assert table[0].startswith("项目编号")
+    assert "包名" in table[0]
+    assert "结算" in table[0]
+    assert set(table[1]) == {"-"}  # 表头下的分隔线
+    assert "PAK-001" in table[2]
+    assert "com.example.pkg1" in table[2]
+    assert "已结算" in table[2]
+
+
+async def test_projects_cmd_group_heading_escapes_count_parentheses():
+    """组标题的数量括号要按 MarkdownV2 转义，否则整条消息发不出去"""
+    cache = _projects_cache(Project(
+        project_id="PAK-001", project_name="项目一",
+        status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+        payment_status=PaymentStatus.PAID,
+    ))
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    assert "🟣 *我方制作中* \\(1\\)" in text
+    # 未转义的裸括号会让 Telegram 解析失败
+    assert "(1)" not in text
+
+
+async def test_projects_cmd_published_group_first_off_shelf_last():
+    """已发布置顶，已下架收尾"""
+    cache = _projects_cache(
+        Project(project_id="PAK-001", project_name="一",
+                status=StatusCode.OFF_SHELF, status_changed_at=None, sheets=[],
+                payment_status=PaymentStatus.PAID),
+        Project(project_id="PAK-002", project_name="二",
+                status=StatusCode.SECOND_REVIEW, status_changed_at=None, sheets=[],
+                payment_status=PaymentStatus.PAID),
+        Project(project_id="PAK-003", project_name="三",
+                status=StatusCode.PUBLISHED, status_changed_at=None, sheets=[],
+                payment_status=PaymentStatus.PAID),
+    )
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    i_published = text.index("已发布")
+    i_second = text.index("复审中")
+    i_off = text.index("已下架")
+    assert i_published < i_second < i_off
+
+
+async def test_projects_cmd_line_omits_status_text():
+    """状态只出现在组标题，行内不再重复"""
+    cache = _projects_cache(Project(
+        project_id="PAK-001", project_name="项目一",
+        package_name="com.example.pkg1",
+        status=StatusCode.PUBLISHED, status_raw="已上架",
+        status_changed_at=None, sheets=[],
+        payment_status=PaymentStatus.PAID,
+    ))
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    table = _code_block_lines(text)
+    # 表头 + 分隔线 + 1 行数据：数据行里只有编号/包名/结算
+    data_line = table[2]
+    assert "已上架" not in data_line
+    assert "已发布" not in data_line
+    assert "PAK-001" in data_line
+
+
+async def test_projects_cmd_table_columns_aligned():
+    """表格每一列在所有行里的起始列号必须一致"""
+    cache = _projects_cache(
+        Project(project_id="PAK-001", project_name="一",
+                package_name="com.example.short",
+                status=StatusCode.PUBLISHED, status_changed_at=None, sheets=[],
+                payment_status=PaymentStatus.PAID),
+        Project(project_id="PAK-0680(6514b)", project_name="二",
+                package_name="com.example.a.very.long.package.name",
+                status=StatusCode.PUBLISHED, status_changed_at=None, sheets=[],
+                payment_status=PaymentStatus.UNPAID),
+    )
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    table = _code_block_lines(text)
+    data_rows = [ln for ln in table if not set(ln) == {"-"}]
+    starts = [_field_starts(ln) for ln in data_rows]
+    assert all(s == starts[0] for s in starts), starts
+
+
+async def test_projects_cmd_unknown_status_gets_own_group():
+    """状态识别不出来的项目按原始文字单独成组"""
+    cache = _projects_cache(Project(
+        project_id="PAK-001", project_name="项目一",
+        status=None, status_raw="待确认",
+        status_changed_at=None, sheets=[],
+        payment_status=PaymentStatus.PAID,
+    ))
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    assert "待确认" in text
+    assert "PAK-001" in text
 
 
 async def test_projects_cmd_admin_sees_payment_markers():

@@ -212,15 +212,8 @@ async def projects_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not summaries:
         await _reply(update, "本群暂无关联项目。" if not privileged else "暂无项目。")
         return
-    lines = [title]
-    from src.bot.templates import payment_display_text, status_display_text
-    for s in summaries:
-        status_text = status_display_text(s) or "未知"
-        pkg = f" — `{s.package_name}`" if s.package_name else ""
-        lines.append(
-            f"• `{s.project_id}`{pkg} — `{status_text}` — {payment_display_text(s)}"
-        )
-    await _reply(update, "\n".join(lines))
+    from src.bot.projects_view import render_projects_list
+    await _reply(update, render_projects_list(summaries, title=title))
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
