@@ -16,6 +16,7 @@ from src.bot.commands import (
     register_handlers,
     _is_admin,
 )
+from src.models.payment import PaymentStatus
 from src.models.project import Mapping, Project
 from src.models.status import StatusCode
 from src.web.cache import ProjectCache
@@ -397,6 +398,125 @@ async def test_projects_cmd_includes_package_name():
     text = u.message.reply_text.await_args.args[0]
     assert "PAK-001" in text
     assert "com.example.pkg1" in text
+
+
+def _projects_cache(*projects: Project) -> ProjectCache:
+    cache = ProjectCache()
+    cache.replace(list(projects))
+    return cache
+
+
+def _customer_ctx(cache: ProjectCache, chat_id: int = -100123):
+    """客户群 context：只映射 PAK-001 / PAK-002。"""
+    mapping_repo = MagicMock()
+    mapping_repo.load_all = MagicMock(return_value=[
+        Mapping(project_id="PAK-001", chat_id=str(chat_id), note="",
+                enabled=True, last_broadcast_at=None,
+                last_broadcast_status=None, last_error=None),
+        Mapping(project_id="PAK-002", chat_id=str(chat_id), note="",
+                enabled=True, last_broadcast_at=None,
+                last_broadcast_status=None, last_error=None),
+    ])
+    c = _make_context()
+    c.bot_data = {
+        "cache": cache, "mapping_repo": mapping_repo,
+        "admin_chat_id": ADMIN_ID,
+        "admin_broadcast_chats": [],
+    }
+    return c
+
+
+async def test_projects_cmd_marks_settled_project():
+    """已结算项目行末显示 💰 已结算"""
+    cache = _projects_cache(Project(
+        project_id="PAK-001", project_name="项目一",
+        package_name="com.example.pkg1",
+        status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+        payment_status=PaymentStatus.PAID,
+    ))
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    assert "已结算" in text
+    assert "未结算" not in text
+
+
+async def test_projects_cmd_marks_unsettled_project():
+    """未结算项目行末显示 ⚠️ 未结算"""
+    cache = _projects_cache(Project(
+        project_id="PAK-001", project_name="项目一",
+        package_name="com.example.pkg1",
+        status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+        payment_status=PaymentStatus.UNPAID,
+    ))
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    assert "未结算" in text
+    assert "已结算" not in text
+
+
+async def test_projects_cmd_missing_payment_counts_as_unsettled():
+    """sheet 没有支付列（payment_status 为空）→ 按未结算显示"""
+    cache = _projects_cache(Project(
+        project_id="PAK-001", project_name="项目一",
+        package_name="com.example.pkg1",
+        status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+        payment_status=None,
+    ))
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    assert "未结算" in text
+
+
+async def test_projects_cmd_marks_settled_and_unsettled_together():
+    """同一群里已结算与未结算项目一起播报，各自带标记"""
+    cache = _projects_cache(
+        Project(
+            project_id="PAK-001", project_name="项目一",
+            package_name="com.example.pkg1",
+            status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+            payment_status=PaymentStatus.PAID,
+        ),
+        Project(
+            project_id="PAK-002", project_name="项目二",
+            package_name="com.example.pkg2",
+            status=StatusCode.PUBLISHED, status_changed_at=None, sheets=[],
+            payment_status=PaymentStatus.UNPAID,
+        ),
+    )
+    u = _make_update(user_id=42, chat_id=-100123)
+    await projects_cmd(u, _customer_ctx(cache))
+    text = u.message.reply_text.await_args.args[0]
+    assert "PAK-001" in text
+    assert "PAK-002" in text
+    assert "已结算" in text
+    assert "未结算" in text
+
+
+async def test_projects_cmd_admin_sees_payment_markers():
+    """admin 私聊看全表时也带结算标记"""
+    cache = _projects_cache(
+        Project(
+            project_id="PRJ-001", project_name="项目一",
+            status=StatusCode.MAKING, status_changed_at=None, sheets=[],
+            payment_status=PaymentStatus.PAID,
+        ),
+        Project(
+            project_id="PRJ-002", project_name="项目二",
+            status=StatusCode.PUBLISHED, status_changed_at=None, sheets=[],
+            payment_status=PaymentStatus.UNPAID,
+        ),
+    )
+    u = _make_update(user_id=ADMIN_ID, chat_id=ADMIN_ID)
+    c = _make_context()
+    c.bot_data = {"cache": cache, "admin_chat_id": ADMIN_ID,
+                  "admin_broadcast_chats": []}
+    await projects_cmd(u, c)
+    text = u.message.reply_text.await_args.args[0]
+    assert "已结算" in text
+    assert "未结算" in text
 
 
 # ---------- admin gates ----------

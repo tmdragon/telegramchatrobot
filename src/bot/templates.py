@@ -23,11 +23,15 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from src.models.payment import PaymentStatus
 from src.models.project import Mapping, Project
 from src.models.status import StatusCode
+
+if TYPE_CHECKING:
+    from src.web.cache import ProjectSummary
 
 
 class BroadcastTrigger(str, Enum):
@@ -110,6 +114,13 @@ STATUS_DISPLAY_CN: dict[StatusCode, str] = {
 }
 
 
+# 结算状态 -> 展示文案。bot 用"结算"口径（web 界面用 filters.PAYMENT_DISPLAY 的"回款"口径）。
+PAYMENT_DISPLAY_CN: dict[PaymentStatus, str] = {
+    PaymentStatus.PAID: "💰 已结算",
+    PaymentStatus.UNPAID: "⚠️ 未结算",
+}
+
+
 def status_display_text(project: Project) -> str:
     """返回项目状态的展示文本：sheet 原文本 → STATUS_DISPLAY_CN → 状态码本身。"""
     if project.status_raw:
@@ -117,6 +128,17 @@ def status_display_text(project: Project) -> str:
     if project.status is not None:
         return STATUS_DISPLAY_CN.get(project.status, project.status.value)
     return ""
+
+
+def payment_display_text(project: "Project | ProjectSummary") -> str:
+    """返回结算状态的展示文本。
+
+    PAID → 💰 已结算；UNPAID → ⚠️ 未结算。
+    sheet 没有支付列（payment_status 为 None）时也按未结算显示——群内催款口径下，
+    "没填"和"没付"同样需要被看见。
+    """
+    code = getattr(project, "payment_status", None)
+    return PAYMENT_DISPLAY_CN.get(code, PAYMENT_DISPLAY_CN[PaymentStatus.UNPAID])
 
 
 def _format_status_line(project: Project) -> str:

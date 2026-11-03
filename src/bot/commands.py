@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 HELP_PUBLIC = (
     "🤖 *checkGPRobot* — 客户群可用指令\n\n"
     "*📋 `/projects`*\n"
-    "列出本群映射的所有项目（含状态、停留时长）\n\n"
+    "列出本群映射的所有项目（含生产状态、结算状态）\n\n"
     "*📊 `/status <查询>`*\n"
     "查看项目当前状态。`查询` 支持以下三种形式：\n\n"
     "  1. *项目编号*（精确）\n"
@@ -213,11 +213,13 @@ async def projects_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _reply(update, "本群暂无关联项目。" if not privileged else "暂无项目。")
         return
     lines = [title]
-    from src.bot.templates import status_display_text
+    from src.bot.templates import payment_display_text, status_display_text
     for s in summaries:
         status_text = status_display_text(s) or "未知"
         pkg = f" — `{s.package_name}`" if s.package_name else ""
-        lines.append(f"• `{s.project_id}`{pkg} — `{status_text}`")
+        lines.append(
+            f"• `{s.project_id}`{pkg} — `{status_text}` — {payment_display_text(s)}"
+        )
     await _reply(update, "\n".join(lines))
 
 
